@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <cdk/cdk.h>
+//#include <pthread.h>
 #include "fhctrl.h"
 
 #define LEFT_MARGIN     0   /* Where the plugin boxes start */
@@ -111,6 +112,17 @@ void nLOG(char *fmt, ...) {
    va_end(args);
 }
 
+static void
+kurwa_jebana(EObjectType cdktype, void *object, void *clientdata, chtype key) {
+    quit = true;
+}
+
+void* tychuju(void* arg) {
+   while(true) {
+      activateCDKScroll(song_list, NULL);
+   }
+}
+
 void nfhc(struct Song *song_first, struct FSTPlug **fst) {
     short i, j;
     int lm = 0, tm = 0;
@@ -154,6 +166,7 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
        addCDKScrollItem(song_list, song->name);
        song = song->next;
     }
+    bindCDKObject(vSCROLL, song_list, 'q', kurwa_jebana, NULL);
     drawCDKScroll(song_list, TRUE);
 
     /* SELECTOR init - same shit for all boxes */
@@ -173,9 +186,13 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
       }
     }
 
+//    pthread_t thread;
+//    pthread_create(&thread, NULL, tychuju, NULL);
+
+    noecho();
+    filter();
     timeout(300);
     cbreak();
-    noecho();
     while(! quit) {
        // For our boxes
        for (i = j = 0; i < 16; i++) {
@@ -199,15 +216,11 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
           update_lcd();
        }
 
-       i = getch();
-       switch(i) {
-         case 'q':
-             quit = true;
-             break;
-//         case 's':
-             
-       }
+       i=getch();
+       if(i == 'q') quit=true;
+       if(i == 's') activateCDKScroll(song_list, NULL);
        refreshCDKScreen(cdkscreen);
+       usleep(30000);
     }
 
 //    get_selector_1 (cdkscreen);
@@ -221,5 +234,7 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
     for (i = 0; i < 16; i++) destroyCDKLabel(selector[i].label);
 
     endCDK();
+
+//    pthread_exit(NULL);  
 }
 
