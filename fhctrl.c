@@ -16,7 +16,7 @@
 #include <jack/jack.h>
 #include <jack/midiport.h>
 
-#include "../../trunk/sysex.h"
+#include "sysex.h"
 #include "fhctrl.h"
 
 // Ncurses interface
