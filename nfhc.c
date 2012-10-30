@@ -30,6 +30,7 @@ CDKSCROLL *song_list;
 bool quit = false;
 extern void send_ident_request(); // From sysex.c
 extern void update_lcd();         // From fhctrl.c
+extern void send_ident_request(); // From fhctrl.c
 int state_color[3] = { 58, 59, 57 };
 
 static int get_selector_1(CDKSCREEN *cdkscreen) {
@@ -112,17 +113,6 @@ void nLOG(char *fmt, ...) {
    va_end(args);
 }
 
-static void
-kurwa_jebana(EObjectType cdktype, void *object, void *clientdata, chtype key) {
-    quit = true;
-}
-
-void* tychuju(void* arg) {
-   while(true) {
-      activateCDKScroll(song_list, NULL);
-   }
-}
-
 void nfhc(struct Song *song_first, struct FSTPlug **fst) {
     short i, j;
     int lm = 0, tm = 0;
@@ -159,14 +149,14 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
 
     /* Create Song List */
     song_list = newCDKScroll ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+10, RIGHT, 8, 
-          LOGWIN_WIDTH, "</U/63>Select song preset:<!05>", 0, 0, FALSE, A_REVERSE, TRUE, FALSE);
+          LOGWIN_WIDTH, "</U/63>Select song preset:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE);
 
     song = song_first;
     while(song) {
        addCDKScrollItem(song_list, song->name);
        song = song->next;
     }
-    bindCDKObject(vSCROLL, song_list, 'q', kurwa_jebana, NULL);
+//    bindCDKObject(vSCROLL, song_list, 'q', kurwa_jebana, NULL);
     drawCDKScroll(song_list, TRUE);
 
     /* SELECTOR init - same shit for all boxes */
@@ -192,7 +182,7 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
     noecho();
     filter();
     timeout(300);
-    cbreak();
+//    cbreak();
     while(! quit) {
        // For our boxes
        for (i = j = 0; i < 16; i++) {
@@ -216,11 +206,27 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
           update_lcd();
        }
 
-       i=getch();
-       if(i == 'q') quit=true;
-       if(i == 's') activateCDKScroll(song_list, NULL);
-       refreshCDKScreen(cdkscreen);
-       usleep(30000);
+       j=getch();
+       // Redraw
+       drawCDKLabel(top_logo, TRUE);
+       drawCDKSwindow(logwin, TRUE);
+       drawCDKScroll(song_list, TRUE);
+       for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
+//      refreshCDKScreen(cdkscreen);
+
+       switch(j) {
+          case 'q': 
+               quit=true;
+               break;
+          case 's':
+            setCDKScrollHighlight(song_list, A_REVERSE);
+            activateCDKScroll(song_list, NULL);
+            setCDKScrollHighlight(song_list, A_NORMAL);
+            break;
+          case 'i':
+            send_ident_request();
+            break;
+       }
     }
 
 //    get_selector_1 (cdkscreen);
