@@ -41,9 +41,9 @@ struct Song* song_first = NULL;
 
 struct LCDScreen lcd_screen;
 
-SysExIdentRqst* sysex_ident_request;
-SysExDumpRequestV1* sysex_dump_request;
-SysExDumpV1* sysex_dump;
+const SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;
+SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
+SysExDumpV1 sysex_dump = SYSEX_DUMP;
 
 struct FSTState* state_new() {
 	struct FSTState* fs = calloc(1,sizeof(struct FSTState));
@@ -239,7 +239,7 @@ further:
 	if (ident_request) {
 		ident_request = false;
 		jack_midi_event_write(outbuf, jack_buffer_size - 1, 
-			(jack_midi_data_t*) sysex_ident_request, sizeof(SysExIdentRqst));
+			(jack_midi_data_t*) &sysex_ident_request, sizeof(SysExIdentRqst));
 	}
 
 	// Send Dump Request
@@ -249,8 +249,8 @@ further:
 		if (!fp->dump_request) continue;
 		fp->dump_request = false;
 
-		sysex_dump_request->uuid = fp->id;
-		jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) sysex_dump_request, sizeof(SysExDumpRequestV1));
+		sysex_dump_request.uuid = fp->id;
+		jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) &sysex_dump_request, sizeof(SysExDumpRequestV1));
 	}
 
 	if (song != NULL) {
@@ -261,14 +261,14 @@ further:
 			if (!fp) continue;
 
 			*fp->state = *song->fst_state[s];
-			sysex_dump->program = fp->state->program;
-			sysex_dump->channel = fp->state->channel;
-			sysex_dump->volume = fp->state->volume;
-			sysex_dump->state = fp->state->state;
-			strcpy((char*) sysex_dump->program_name, fp->state->program_name);
-			strcpy((char*) sysex_dump->plugin_name, fp->name);
+			sysex_dump.program = fp->state->program;
+			sysex_dump.channel = fp->state->channel;
+			sysex_dump.volume = fp->state->volume;
+			sysex_dump.state = fp->state->state;
+			strcpy((char*) sysex_dump.program_name, fp->state->program_name);
+			strcpy((char*) sysex_dump.plugin_name, fp->name);
 		
-			jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) sysex_dump, sizeof(SysExDumpV1));
+			jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) &sysex_dump, sizeof(SysExDumpV1));
 		}
 	}
 
@@ -426,9 +426,9 @@ int main (int argc, char* argv[]) {
 	}
 
 	// Init sysex comunicates
-	sysex_ident_request = sysex_ident_request_new();
-	sysex_dump_request = sysex_dump_request_v1_new();
-	sysex_dump = sysex_dump_v1_new();
+//	sysex_ident_request = SYSEX_IDENT_REQUEST;
+//	sysex_dump_request = SYSEX_DUMP_REQUEST(0);
+//	sysex_dump = sysex_dump_v1_new();
 
 	// ncurses loop
 	nfhc(song_first, fst);

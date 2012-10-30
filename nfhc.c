@@ -220,7 +220,8 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
                break;
           case 's':
             setCDKScrollHighlight(song_list, A_REVERSE);
-            activateCDKScroll(song_list, NULL);
+            tm = activateCDKScroll(song_list, NULL);
+            nLOG("Choosen %d", tm);
             setCDKScrollHighlight(song_list, A_NORMAL);
             break;
           case 'i':
