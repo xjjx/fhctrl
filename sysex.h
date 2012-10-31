@@ -32,7 +32,7 @@ typedef struct _SysExIdentRqst {
 } SysExIdentRqst;
 
 #define SYSEX_IDENT_REPLY {SYSEX_BEGIN,SYSEX_NON_REALTIME,0x7F,SYSEX_GENERAL_INFORMATION,SYSEX_IDENTITY_REPLY,\
-   SYSEX_MYID,0,0,SYSEX_VERSION,SYSEX_END}
+   SYSEX_MYID,{0},{0},SYSEX_VERSION,SYSEX_END}
 typedef struct _SysExIdentReply {
 	const uint8_t begin;
 	const uint8_t type;
@@ -61,7 +61,7 @@ enum SysExState {
 	SYSEX_STATE_ACTIVE   = 1
 };
 
-#define SYSEX_DUMP {SYSEX_BEGIN,SYSEX_MYID,SYSEX_VERSION,SYSEX_TYPE_DUMP,0,0,0,0,0,"","",SYSEX_END}
+#define SYSEX_DUMP {SYSEX_BEGIN,SYSEX_MYID,SYSEX_VERSION,SYSEX_TYPE_DUMP,0,0,0,0,0,{0},{0},SYSEX_END}
 typedef struct _SysExDumpV1 {
 	const uint8_t begin;
 	const uint8_t id;
@@ -77,7 +77,8 @@ typedef struct _SysExDumpV1 {
 	const uint8_t end;
 } SysExDumpV1;
 
-void sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
+static void
+sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
 	size_t i;
 	for (i=0; i < strlen(name) && i < size_dest - 1; i++) {
 		if ( ! isprint( toascii( name[i]) ) )
