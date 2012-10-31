@@ -31,7 +31,9 @@ bool quit = false;
 extern void send_ident_request(); // From sysex.c
 extern void update_lcd();         // From fhctrl.c
 extern void send_ident_request(); // From fhctrl.c
-int state_color[3] = { 58, 59, 57 };
+extern void song_send(short SongNumber);
+extern void song_update(short SongNumber);
+int state_color[3] = { 58, 59, 0 };
 
 static int get_selector_1(CDKSCREEN *cdkscreen) {
     char    *title  = "<C>Set a new value:";
@@ -219,9 +221,17 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
                quit=true;
                break;
           case 's':
+            // Set Song
             setCDKScrollHighlight(song_list, A_REVERSE);
             tm = activateCDKScroll(song_list, NULL);
-            nLOG("Choosen %d", tm);
+            song_send(tm);
+            setCDKScrollHighlight(song_list, A_NORMAL);
+            break;
+          case 'u':
+            // Update Song
+            setCDKScrollHighlight(song_list, A_REVERSE);
+            tm = activateCDKScroll(song_list, NULL);
+            song_update(tm);
             setCDKScrollHighlight(song_list, A_NORMAL);
             break;
           case 'i':

@@ -34,6 +34,7 @@ static jack_nframes_t jack_buffer_size;
 static jack_nframes_t jack_sample_rate;
 short CtrlCh = 15; /* Our default MIDI control channel */
 short SongCount = 0;
+short SongSend = -1;
 bool ident_request = false;
 
 struct FSTPlug* fst[128] = {NULL};
@@ -104,7 +105,7 @@ struct Song* song_new() {
 	return s;
 }
 
-struct Song* song_get(int SongNumber) {
+struct Song* song_get(short SongNumber) {
 	if (SongNumber >= SongCount)
 		return NULL;
 
@@ -116,6 +117,26 @@ struct Song* song_get(int SongNumber) {
 	}
 
 	return song;
+}
+
+void song_send(short SongNumber) {
+	SongSend = SongNumber;
+}
+
+void song_update(short SongNumber) {
+	struct Song* song = song_get(SongNumber);
+	if(song == NULL) {
+		nLOG("SongUpdate: no such song");
+		return;
+	}
+
+	short i;
+	for(i=0; i < 128; i++) {
+		if (fst[i] == NULL) continue;
+		// Do not update state for inactive FSTPlugs
+		if (fst[i]->state->state == FST_NA) continue;
+		*song->fst_state[i] = *fst[i]->state;
+	}
 }
 
 void send_ident_request() {
@@ -161,7 +182,6 @@ int process (jack_nframes_t frames, void* arg) {
 	unsigned short s;
 	jack_midi_event_t event;
 	struct FSTPlug* fp;
-	struct Song* song = NULL;
 
 	inbuf = jack_port_get_buffer (inport, frames);
 	assert (inbuf);
@@ -179,7 +199,7 @@ int process (jack_nframes_t frames, void* arg) {
 		if ( (event.buffer[0] & 0xF0) == 0xC0 &&
 		     (event.buffer[0] & 0x0F) == CtrlCh
 		) {
-			song = song_get(event.buffer[1]);
+			SongSend = event.buffer[1];
 			continue;
 		}
 
@@ -253,23 +273,29 @@ further:
 		jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) &sysex_dump_request, sizeof(SysExDumpRequestV1));
 	}
 
-	if (song != NULL) {
-		nLOG("Send Song \"%s\" SysEx", song->name);
-		// Dump states via SysEx
-		for (s=0; s < 128; s++) {
-			fp = fst[s];
-			if (!fp) continue;
+	// Send Song
+	if (SongSend < 0) return 0;
 
-			*fp->state = *song->fst_state[s];
-			sysex_dump.program = fp->state->program;
-			sysex_dump.channel = fp->state->channel;
-			sysex_dump.volume = fp->state->volume;
-			sysex_dump.state = fp->state->state;
-			strcpy((char*) sysex_dump.program_name, fp->state->program_name);
-			strcpy((char*) sysex_dump.plugin_name, fp->name);
-		
-			jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) &sysex_dump, sizeof(SysExDumpV1));
-		}
+	struct Song* song = song_get(SongSend);
+	SongSend = -1;
+	if (song == NULL) return 0;
+			
+	nLOG("Send Song \"%s\" SysEx", song->name);
+	// Dump states via SysEx - for all FST
+	for (s=0; s < 128; s++) {
+		if (!fst[s]) continue;
+		fp = fst[s];
+
+		*fp->state = *song->fst_state[s];
+		sysex_dump.program = fp->state->program;
+		sysex_dump.channel = fp->state->channel;
+		sysex_dump.volume = fp->state->volume;
+		sysex_dump.state = fp->state->state;
+		strcpy((char*) sysex_dump.program_name, fp->state->program_name);
+		strcpy((char*) sysex_dump.plugin_name, fp->name);
+		fp->change = true;
+
+		jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) &sysex_dump, sizeof(SysExDumpV1));
 	}
 
 	return 0;
@@ -424,11 +450,6 @@ int main (int argc, char* argv[]) {
 		fprintf (stderr, "Could not activate client.\n");
 		exit (EXIT_FAILURE);
 	}
-
-	// Init sysex comunicates
-//	sysex_ident_request = SYSEX_IDENT_REQUEST;
-//	sysex_dump_request = SYSEX_DUMP_REQUEST(0);
-//	sysex_dump = sysex_dump_v1_new();
 
 	// ncurses loop
 	nfhc(song_first, fst);
