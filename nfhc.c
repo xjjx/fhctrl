@@ -10,7 +10,6 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <cdk/cdk.h>
-//#include <pthread.h>
 #include "fhctrl.h"
 
 #define LEFT_MARGIN     0   /* Where the plugin boxes start */
@@ -32,6 +31,7 @@ extern void send_ident_request(); // From sysex.c
 extern void update_lcd();         // From fhctrl.c
 extern void send_ident_request(); // From fhctrl.c
 extern void song_send(short SongNumber);
+struct Song* song_new();
 extern void song_update(short SongNumber);
 int state_color[3] = { 58, 59, 0 };
 
@@ -178,9 +178,6 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
       }
     }
 
-//    pthread_t thread;
-//    pthread_create(&thread, NULL, tychuju, NULL);
-
     noecho();
     filter();
     timeout(300);
@@ -237,6 +234,10 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
           case 'i':
             send_ident_request();
             break;
+          case 'n':
+            song = song_new();
+       	    addCDKScrollItem(song_list, song->name);
+            break;
        }
     }
 
@@ -251,7 +252,5 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
     for (i = 0; i < 16; i++) destroyCDKLabel(selector[i].label);
 
     endCDK();
-
-//    pthread_exit(NULL);  
 }
 

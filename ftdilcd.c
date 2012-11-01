@@ -28,8 +28,7 @@ DSR(D5) (pin5)  RW D5 (0x20)
 DCD(D6) (pin4)  RS D6 (0x40)
 */
 
-//#define FTDI_BAUDRATE 921600
-#define FTDI_BAUDRATE 9600
+#define FTDI_BAUDRATE 921600
 #define FTDI_VENDOR 0x0403
 #define FTDI_PRODUCT 0x6001
 #define LCD_EN 0x10
@@ -129,8 +128,7 @@ void lcd_text(short x, short y, char* txt) {
 }
 
 
-bool
-lcd_init() {
+bool lcd_init() {
     int f;
     ftdic = ftdi_new();
     

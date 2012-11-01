@@ -156,6 +156,7 @@ void update_lcd() {
 		return;
 
 	struct FSTPlug* fp = lcd_screen.fst;
+	if(!fp) return;
 	char line[24];
 
 	// Line 1
@@ -217,11 +218,14 @@ int process (jack_nframes_t frames, void* arg) {
 			SysExIdentReply* r = (SysExIdentReply*) event.buffer;
 			nLOG("Got SysEx Identity Reply from ID %X : %X", r->id, r->model[1]);
 			fp = fst_get(r->model[1]);
-			fp->change = true;
 
 			// If this is FSTPlug then dump it state
-			if (r->id == SYSEX_MYID)
+			if (r->id == SYSEX_MYID) {
+				// Note: we refresh GUI when Dump back to us
 				fp->dump_request = true;
+			} else {
+				fp->change = true;
+			}
 			// don't forward this message
 			continue;
 		case SYSEX_MYID:
@@ -279,21 +283,35 @@ further:
 	struct Song* song = song_get(SongSend);
 	SongSend = -1;
 	if (song == NULL) return 0;
-			
+	
+	enum State curState;
 	nLOG("Send Song \"%s\" SysEx", song->name);
 	// Dump states via SysEx - for all FST
 	for (s=0; s < 128; s++) {
-		if (!fst[s]) continue;
 		fp = fst[s];
+		if (!fp) continue;
 
+		curState = fp->state->state;
 		*fp->state = *song->fst_state[s];
+		// If plug is NA then keep it state and skip sending to plug
+		if(curState == FST_NA) {
+			fp->state->state = FST_NA;
+			// Update display
+			fp->change = true;
+			continue;
+		// If plug is NA in Song then preserve it's current state
+		} else if(fp->state->state == FST_NA) {
+			fp->state->state = curState;
+		}
+		// Update display
+		fp->change = true;
+
 		sysex_dump.program = fp->state->program;
 		sysex_dump.channel = fp->state->channel;
 		sysex_dump.volume = fp->state->volume;
 		sysex_dump.state = fp->state->state;
 		strcpy((char*) sysex_dump.program_name, fp->state->program_name);
 		strcpy((char*) sysex_dump.plugin_name, fp->name);
-		fp->change = true;
 
 		jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) &sysex_dump, sizeof(SysExDumpV1));
 	}
@@ -427,6 +445,7 @@ int main (int argc, char* argv[]) {
 	if (argv[1]) config_file = argv[1];
 
 	lcd_screen.available = lcd_init();
+	if(lcd_screen.available) lcd_screen.fst = NULL;
 
 	// Try read file
 	if (config_file != NULL)
