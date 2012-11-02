@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <ftdi.h>
-#include <stdbool.h>
+
+#include "ftdilcd.h"
 
 extern void nLOG(char *fmt, ...);
 
@@ -53,17 +54,12 @@ DCD(D6) (pin4)  RS D6 (0x40)
 
 struct ftdi_context* ftdic;
 
-bool lcd_init();
-void lcd_text(short x, short y, char* txt);
-void lcd_close();
-
 enum LCD_MODE {
   LCD_CMD,
   LCD_DATA
 };
 
-static void
-lcd_write (enum LCD_MODE lcd_mode, char data) {
+static void lcd_write (enum LCD_MODE lcd_mode, char data) {
    unsigned char buf[4];
    unsigned char portControl = 0;
    int f;
@@ -83,13 +79,11 @@ lcd_write (enum LCD_MODE lcd_mode, char data) {
    }
 }
 
-static void
-lcd_cmd(char cmd) {
+static void lcd_cmd(char cmd) {
    lcd_write(LCD_CMD, cmd);
 }
 
-static bool
-lcd_pos(short x, short y) {
+static bool lcd_pos(short x, short y) {
    int ca; // Cursor Address
 
    if (x >= LCD_WIDTH || y >= LCD_HEIGHT)

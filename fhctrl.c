@@ -18,13 +18,10 @@
 #include "sysex.h"
 #include "fhctrl.h"
 
+#include "ftdilcd.h"
+
 // Ncurses interface
 extern void nfhc(struct Song *song_first, struct FSTPlug **fst);
-
-// LCD via FTDI support
-extern bool lcd_init();
-extern void lcd_text(short x, short y, char* txt);
-extern void lcd_close();
 
 // Config file support
 bool dump_state(char const* config_file, struct Song *song_first, struct FSTPlug **fst, short CtrlCh);
@@ -328,7 +325,14 @@ int main (int argc, char* argv[]) {
 	if (argv[1]) config_file = argv[1];
 
 	lcd_screen.available = lcd_init();
-	if(lcd_screen.available) lcd_screen.fst = NULL;
+	if (lcd_screen.available) {
+		char lcdline[16];
+		snprintf(lcdline, 16, "%s", client_name);
+		lcd_text(0,0,lcdline);
+		snprintf(lcdline, 16, "says HELLO");
+		lcd_text(0,1,lcdline);
+		lcd_screen.fst = NULL;
+	}
 
 	// Try read file
 	if (config_file != NULL)
