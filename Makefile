@@ -5,6 +5,9 @@ CFLAGS = -O2 -Wall -g -frounding-math -fsignaling-nans -mfpmath=sse -msse2
 
 fhctrl: nfhc.c config.c ftdilcd.c fhctrl.c
 	$(CC) $(CFLAGS) -g -o $@ $^ -ljack -lconfig -lcdk -lcurses -lftdi
+	
+session_notify: session_notify.c
+	$(CC) -g -o $@ $^ -ljack
 
 clean:
-	rm -f fhctrl nfhc
+	rm -f fhctrl nfhc session_notify

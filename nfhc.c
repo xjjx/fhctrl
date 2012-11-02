@@ -33,6 +33,7 @@ extern void send_ident_request(); // From fhctrl.c
 extern void song_send(short SongNumber);
 struct Song* song_new();
 extern void song_update(short SongNumber);
+extern void session_reply();
 int state_color[3] = { 58, 59, 0 };
 
 static int get_selector_1(CDKSCREEN *cdkscreen) {
@@ -115,7 +116,7 @@ void nLOG(char *fmt, ...) {
    va_end(args);
 }
 
-void nfhc(struct Song **song_first, struct FSTPlug **fst) {
+void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) {
     short i, j;
     int lm = 0, tm = 0;
     bool lcd_need_update = false;
@@ -204,6 +205,9 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst) {
           lcd_need_update = false;
           update_lcd();
        }
+
+       /* If Jack need our answer */
+       if (*need_ses_reply) session_reply();
 
        j=getch();
        // Redraw

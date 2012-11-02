@@ -10,6 +10,7 @@ extern void nLOG(char *fmt, ...);
 
 bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlug **fst) {
 	short i, j, sn = 0;
+	int ret;
 	char name[10];
 	struct Song* s;
 	struct FSTState* fs;
@@ -17,7 +18,7 @@ bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlu
 	config_setting_t* group;
 	config_setting_t* list;
 
-	nLOG("Dump state to %s", config_file);
+	nLOG("Save to %s", config_file);
 
 	config_init(&cfg);
 
@@ -51,11 +52,16 @@ bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlu
 		}
 	}
 
-	config_write_file(&cfg, config_file);
-
+	ret = config_write_file(&cfg, config_file);
 	config_destroy(&cfg);
 
-	return true;
+	if(ret == CONFIG_TRUE) {
+		nLOG("Save OK");
+		return true;
+	} else {
+		nLOG("Save Fail");
+		return false;
+	}
 }
 
 bool load_state(const char* config_file, struct Song **song_first, struct FSTPlug **fst) {

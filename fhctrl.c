@@ -9,11 +9,11 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <assert.h>
-#include <unistd.h>
 #include <signal.h>
 #include <string.h>
 #include <jack/jack.h>
 #include <jack/midiport.h>
+#include <jack/session.h>
 
 #include "sysex.h"
 #include "fhctrl.h"
@@ -21,31 +21,37 @@
 #include "ftdilcd.h"
 
 // Ncurses interface
-extern void nfhc(struct Song **song_first, struct FSTPlug **fst);
+extern void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply);
 
 // Config file support
 bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlug **fst);
 bool load_state(const char* config_file, struct Song **song_first, struct FSTPlug **fst);
 
-char const* client_name = "FHControl";
+/* Out private variables */
+static char const* client_name = "FHControl";
+static jack_client_t* jack_client;
 static jack_port_t* inport;
 static jack_port_t* outport;
 static jack_nframes_t jack_buffer_size;
 static jack_nframes_t jack_sample_rate;
-short CtrlCh = 15; /* Our default MIDI control channel */
-short SongCount = 0;
-short SongSend = -1;
-bool ident_request = false;
+static jack_session_event_t* session_event;
+static short CtrlCh = 15; /* Our default MIDI control channel */
+static short SongCount = 0;
+static short SongSend = -1;
+static bool ident_request = false;
 
+static const SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;
+static SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
+static SysExDumpV1 sysex_dump = SYSEX_DUMP;
+
+/* Public variables */
 struct FSTPlug* fst[128] = {NULL};
 struct Song* song_first = NULL;
+bool need_ses_reply = false;
 
 struct LCDScreen lcd_screen;
 
-const SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;
-SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
-SysExDumpV1 sysex_dump = SYSEX_DUMP;
-
+/* Function */
 struct FSTState* state_new() {
 	struct FSTState* fs = calloc(1,sizeof(struct FSTState));
 	fs->state = FST_NA; // Initial state is Inactive
@@ -172,6 +178,32 @@ void update_lcd() {
 
 	// Line 3
 	lcd_text(0,2,fp->name);
+}
+
+void session_reply() {
+	nLOG("session callback");
+
+	const char *restore_cmd = "fhctrl \"${SESSION_DIR}state.cfg\"";
+	char filename[FILENAME_MAX];
+
+	// Save state, set error if fail
+	snprintf(filename, sizeof(filename), "%sstate.cfg", session_event->session_dir);
+	if (! dump_state(filename, &song_first, fst) )
+		session_event->flags |= JackSessionSaveError;
+
+	session_event->command_line = strdup(restore_cmd);
+
+	jack_session_reply(jack_client, session_event);
+
+//	if (event->type == JackSessionSaveAndQuit)
+
+	jack_session_event_free(session_event);
+	need_ses_reply = false;
+}
+
+static void session_callback_handler(jack_session_event_t *event, void* arg) {
+	session_event = event;
+	need_ses_reply = true;
 }
 
 int process (jack_nframes_t frames, void* arg) {
@@ -319,7 +351,6 @@ further:
 }
 
 int main (int argc, char* argv[]) {
-	jack_client_t* client;
 	char const* config_file = NULL;
 
 	if (argv[1]) config_file = argv[1];
@@ -338,27 +369,32 @@ int main (int argc, char* argv[]) {
 	if (config_file != NULL)
 		load_state(config_file, &song_first, fst);
 
-	client = jack_client_open (client_name, JackNullOption, NULL);
-	if (client == NULL) {
+	jack_client = jack_client_open (client_name, JackNullOption, NULL);
+	if (jack_client == NULL) {
 		fprintf (stderr, "Could not create JACK client.\n");
 		exit (EXIT_FAILURE);
 	}
 
-	jack_set_process_callback (client, process, 0);
+	jack_set_process_callback (jack_client, process, 0);
 
-	inport = jack_port_register (client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	outport = jack_port_register (client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
-	jack_buffer_size = jack_get_buffer_size(client);
-	jack_sample_rate = jack_get_sample_rate(client);
+        if (jack_set_session_callback) {
+             printf( "Setting up session callback\n" );
+             jack_set_session_callback(jack_client, session_callback_handler, NULL);
+        }
+
+	inport = jack_port_register (jack_client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+	outport = jack_port_register (jack_client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+	jack_buffer_size = jack_get_buffer_size(jack_client);
+	jack_sample_rate = jack_get_sample_rate(jack_client);
 
 
-	if ( jack_activate (client) != 0 ) {
+	if ( jack_activate (jack_client) != 0 ) {
 		fprintf (stderr, "Could not activate client.\n");
 		exit (EXIT_FAILURE);
 	}
 
 	// ncurses loop
-	nfhc(&song_first, fst);
+	nfhc(&song_first, fst, &need_ses_reply);
 
 	if (lcd_screen.available)
 		lcd_close();
