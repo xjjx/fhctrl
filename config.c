@@ -6,8 +6,9 @@
 
 extern struct FSTPlug* fst_get(uint8_t uuid);
 extern struct Song* song_new();
+extern void nLOG(char *fmt, ...);
 
-bool dump_state(char const* config_file, struct Song *song_first, struct FSTPlug **fst, short CtrlCh) {
+bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlug **fst) {
 	short i, j, sn = 0;
 	char name[10];
 	struct Song* s;
@@ -22,7 +23,6 @@ bool dump_state(char const* config_file, struct Song *song_first, struct FSTPlug
 
 	// Save plugs
 	group = config_setting_add(cfg.root, "global", CONFIG_TYPE_GROUP);
-	config_setting_set_int(group, CtrlCh); // Control MIDI channel
 	for (i = j = 0; i < 128; i++) {
 		if (fst[i] == NULL) continue;
 
@@ -33,7 +33,7 @@ bool dump_state(char const* config_file, struct Song *song_first, struct FSTPlug
 	}
 
 	// Save songs
-	for(s = song_first; s; s = s->next) {
+	for(s = *song_first; s; s = s->next) {
 		sprintf(name, "song%d", sn++);
 		group = config_setting_add(cfg.root, name, CONFIG_TYPE_GROUP);
 		for (i = j = 0; i < 128; i++) {
@@ -58,7 +58,7 @@ bool dump_state(char const* config_file, struct Song *song_first, struct FSTPlug
 	return true;
 }
 
-bool load_state(const char* config_file, struct Song *song_first, struct FSTPlug **fst, short CtrlCh) {
+bool load_state(const char* config_file, struct Song **song_first, struct FSTPlug **fst) {
 	struct FSTPlug* f;
 	struct FSTState* fs;
 	struct Song* song;
@@ -95,13 +95,14 @@ bool load_state(const char* config_file, struct Song *song_first, struct FSTPlug
 
 		// Songs iteration
 		s = 0;
-		song = song_first;
+		song = *song_first;
 
 again:
 		sprintf(name, "song%d", s);
 		if (config_lookup(&cfg, name) == NULL)
 			continue;
 
+		// Create new song if needed
 		if (! song) song = song_new();
 
 		sprintf(name, "song%d.%s", s++, plugName);

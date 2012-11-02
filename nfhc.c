@@ -115,7 +115,7 @@ void nLOG(char *fmt, ...) {
    va_end(args);
 }
 
-void nfhc(struct Song *song_first, struct FSTPlug **fst) {
+void nfhc(struct Song **song_first, struct FSTPlug **fst) {
     short i, j;
     int lm = 0, tm = 0;
     bool lcd_need_update = false;
@@ -153,7 +153,7 @@ void nfhc(struct Song *song_first, struct FSTPlug **fst) {
     song_list = newCDKScroll ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+10, RIGHT, 8, 
           LOGWIN_WIDTH, "</U/63>Select song preset:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE);
 
-    song = song_first;
+    song = *song_first;
     while(song) {
        addCDKScrollItem(song_list, song->name);
        song = song->next;

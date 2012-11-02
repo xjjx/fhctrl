@@ -21,11 +21,11 @@
 #include "ftdilcd.h"
 
 // Ncurses interface
-extern void nfhc(struct Song *song_first, struct FSTPlug **fst);
+extern void nfhc(struct Song **song_first, struct FSTPlug **fst);
 
 // Config file support
-bool dump_state(char const* config_file, struct Song *song_first, struct FSTPlug **fst, short CtrlCh);
-bool load_state(const char* config_file, struct Song *song_first, struct FSTPlug **fst, short CtrlCh);
+bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlug **fst);
+bool load_state(const char* config_file, struct Song **song_first, struct FSTPlug **fst);
 
 char const* client_name = "FHControl";
 static jack_port_t* inport;
@@ -81,7 +81,7 @@ struct Song* song_new() {
 	struct Song** snptr;
 	struct Song* s = calloc(1, sizeof(struct Song));
 
-	//printf("Creating new song\n");
+	//nLOG("Creating new song");
 	// Add state for already known plugins
 	for(i=0; i < 128; i++) {
 		if (fst[i] == NULL) continue;
@@ -336,7 +336,7 @@ int main (int argc, char* argv[]) {
 
 	// Try read file
 	if (config_file != NULL)
-		load_state(config_file, song_first, fst, CtrlCh);
+		load_state(config_file, &song_first, fst);
 
 	client = jack_client_open (client_name, JackNullOption, NULL);
 	if (client == NULL) {
@@ -358,13 +358,13 @@ int main (int argc, char* argv[]) {
 	}
 
 	// ncurses loop
-	nfhc(song_first, fst);
+	nfhc(&song_first, fst);
 
 	if (lcd_screen.available)
 		lcd_close();
 
 	if (config_file != NULL)
-		dump_state(config_file, song_first, fst, CtrlCh);
+		dump_state(config_file, &song_first, fst);
 
 	return 0;
 }
