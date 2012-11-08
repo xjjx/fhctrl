@@ -9,5 +9,8 @@ fhctrl: nfhc.c config.c ftdilcd.c fhctrl.c
 session_notify: session_notify.c
 	$(CC) -g -o $@ $^ -ljack
 
+lsp: lsp.c
+	$(CC) -g -o $@ $^ -ljack
+
 clean:
-	rm -f fhctrl nfhc session_notify
+	rm -f fhctrl nfhc session_notify lsp

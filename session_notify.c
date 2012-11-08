@@ -19,21 +19,27 @@
  */
 
 #include <stdio.h>
-#include <errno.h>
-#include <unistd.h>
 #include <signal.h>
-#include <stdlib.h>
 #include <string.h>
+#include <libgen.h>
 #include <jack/jack.h>
 #include <jack/jslist.h>
 #include <jack/transport.h>
 #include <jack/session.h>
 
-char *package;				/* program name */
-jack_client_t *client;
+typedef struct {
+	char name[32];
+	char uuid[16];
+} uuid_map_t;
 
-jack_session_event_type_t notify_type;
-char *save_path = NULL;
+jack_client_t *client;
+JSList *uuid_map = NULL;
+
+void usage(char *program_name)
+{
+	fprintf(stderr, "usage: %s quit|save [path]\n", program_name);
+	exit(9);
+}
 
 void jack_shutdown(void *arg)
 {
@@ -47,49 +53,6 @@ void signal_handler(int sig)
 	fprintf(stderr, "signal received, exiting ...\n");
 	exit(0);
 }
-
-void parse_arguments(int argc, char *argv[])
-{
-
-	/* basename $0 */
-	package = strrchr(argv[0], '/');
-	if (package == 0)
-		package = argv[0];
-	else
-		package++;
-
-	if (argc==2) {
-		if( !strcmp( argv[1], "quit" ) ) {
-			notify_type = JackSessionSaveAndQuit;
-			return;
-		}
-	}
-	if (argc==3) {
-		if( !strcmp( argv[1], "save" ) ) {
-			char *last;
-			notify_type = JackSessionSave;
-			strcpy(save_path, argv[2]);
-
-			last = save_path + strlen(save_path) - 1;
-			if (*last != '/') {
-				*(++last) = '/';
-				*(++last) = '\0';
-			}
-
-			return;
-		}
-
-	}
-	fprintf(stderr, "usage: %s quit|save [path]\n", package);
-	exit(9);
-}
-
-typedef struct {
-	char name[32];
-	char uuid[16];
-} uuid_map_t;
-
-JSList *uuid_map = NULL;
 
 void add_uuid_mapping( const char *uuid ) {
 	char *clientname = jack_get_client_name_by_uuid( client, uuid );
@@ -127,12 +90,24 @@ char *map_port_name_to_uuid_port( const char *port_name )
 
 int main(int argc, char *argv[])
 {
-	save_path = alloca(strlen(argv[2]) + 1);
-	parse_arguments(argc, argv);
-	jack_session_command_t *retval;
-	int k,i,j;
-	int exit_code = 0;
+	/* Parse arguments */
+	char *package = basename(argv[0]); /* Program Name */
+	if (argc != 3) usage(package);
 
+	jack_session_event_type_t notify_type;
+	if ( ! strcmp( argv[1], "quit" ) ) {
+		notify_type = JackSessionSaveAndQuit;
+	} else if ( ! strcmp( argv[1], "save" ) ) {
+		notify_type = JackSessionSave;
+	} else {
+		usage(package);
+	}
+
+	/* Prase save path (it don't like trailing slash */
+	char* save_path = alloca(strlen(argv[2]) + 1);
+	strcpy(save_path, argv[2]);
+	char *last = save_path + strlen(save_path) - 1;
+	if (*last != '/') { *(++last) = '/'; *(++last) = '\0'; }
 
 	/* become a JACK client */
 	if ((client = jack_client_open(package, JackNullOption, NULL)) == 0) {
@@ -149,7 +124,10 @@ int main(int argc, char *argv[])
 
 	jack_activate(client);
 
-
+	printf("ses_start_clients() {\ntrue\n");
+	jack_session_command_t *retval;
+	int k,i,j;
+	int exit_code = 0;
 	retval = jack_session_notify( client, NULL, notify_type, save_path );
 	for(i=0; retval[i].uuid; i++ ) {
 		if ( retval[i].flags & JackSessionSaveError) {
@@ -159,11 +137,15 @@ int main(int argc, char *argv[])
 		}
 
 		printf( "export SESSION_DIR=\"%s%s/\"\n", save_path, retval[i].client_name );
-		printf( "%s &\n", retval[i].command );
+		if ( retval[i].flags & JackSessionNeedTerminal ) {
+			/* ncurses aplications */
+			printf( "$XTERM %s &\n", retval[i].command );
+		} else {
+			printf( "%s &\n", retval[i].command );
+		}
 		add_uuid_mapping(retval[i].uuid); 
 	}
-
-	printf( "sleep 10\n" );
+	printf("}\n\nses_restore_connections() {\ntrue\n");
 
 	for(k=0; retval[k].uuid; k++ ) {
 		if ( retval[k].flags & JackSessionSaveError )
@@ -174,9 +156,8 @@ int main(int argc, char *argv[])
 		snprintf( port_regexp, jack_client_name_size()+3, "%s:.*", client_name );
 		jack_free(client_name);
 		const char **ports = jack_get_ports( client, port_regexp, NULL, 0 );
-		if( !ports ) {
-			continue;
-		}
+		if( !ports ) continue;
+
 		for (i = 0; ports[i]; ++i) {
 			const char **connections;
 			if ((connections = jack_port_get_all_connections (client, jack_port_by_name(client, ports[i]))) != 0) {
@@ -192,6 +173,7 @@ int main(int argc, char *argv[])
 
 	}
 	jack_session_commands_free(retval);
+	printf("}\n");
 
 	jack_client_close(client);
 

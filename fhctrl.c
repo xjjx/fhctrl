@@ -183,7 +183,7 @@ void update_lcd() {
 void session_reply() {
 	nLOG("session callback");
 
-	const char *restore_cmd = "fhctrl \"${SESSION_DIR}state.cfg\"";
+	char *restore_cmd = malloc(256);
 	char filename[FILENAME_MAX];
 
 	// Save state, set error if fail
@@ -191,7 +191,10 @@ void session_reply() {
 	if (! dump_state(filename, &song_first, fst) )
 		session_event->flags |= JackSessionSaveError;
 
-	session_event->command_line = strdup(restore_cmd);
+	session_event->flags |= JackSessionNeedTerminal;
+
+	snprintf(restore_cmd, 256, "fhctrl \"${SESSION_DIR}state.cfg\" %s", session_event->client_uuid);
+	session_event->command_line = restore_cmd;
 
 	jack_session_reply(jack_client, session_event);
 
@@ -352,8 +355,10 @@ further:
 
 int main (int argc, char* argv[]) {
 	char const* config_file = NULL;
+	char *uuid = NULL;
 
 	if (argv[1]) config_file = argv[1];
+	if (argv[2]) uuid = argv[2];
 
 	lcd_screen.available = lcd_init();
 	if (lcd_screen.available) {
@@ -369,7 +374,12 @@ int main (int argc, char* argv[]) {
 	if (config_file != NULL)
 		load_state(config_file, &song_first, fst);
 
-	jack_client = jack_client_open (client_name, JackNullOption, NULL);
+	if (uuid) {
+		jack_client = jack_client_open (client_name, JackSessionID, NULL, uuid);
+		printf("Sesja: %s\n", uuid);
+	} else {
+		jack_client = jack_client_open (client_name, JackNullOption, NULL);
+	}
 	if (jack_client == NULL) {
 		fprintf (stderr, "Could not create JACK client.\n");
 		exit (EXIT_FAILURE);
