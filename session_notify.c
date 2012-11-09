@@ -124,7 +124,6 @@ int main(int argc, char *argv[])
 
 	jack_activate(client);
 
-	printf("ses_start_clients() {\ntrue\n");
 	jack_session_command_t *retval;
 	int k,i,j;
 	int exit_code = 0;
@@ -145,7 +144,6 @@ int main(int argc, char *argv[])
 		}
 		add_uuid_mapping(retval[i].uuid); 
 	}
-	printf("}\n\nses_restore_connections() {\ntrue\n");
 
 	for(k=0; retval[k].uuid; k++ ) {
 		if ( retval[k].flags & JackSessionSaveError )
@@ -164,7 +162,7 @@ int main(int argc, char *argv[])
 				for (j = 0; connections[j]; j++) {
 					char *src = map_port_name_to_uuid_port( ports[i] ); 
 					char *dst = map_port_name_to_uuid_port( connections[j] ); 
-					printf( "jack_connect -u \"%s\" \"%s\"\n", src, dst );
+					printf( "connect -w 10 -u \"%s\" \"%s\"\n", src, dst );
 				}
 				jack_free (connections);
 			} 
@@ -173,7 +171,6 @@ int main(int argc, char *argv[])
 
 	}
 	jack_session_commands_free(retval);
-	printf("}\n");
 
 	jack_client_close(client);
 

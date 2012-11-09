@@ -154,6 +154,7 @@ void send_ident_request() {
 	}
 
 	ident_request = true;
+	nLOG("Sent ident request");
 }
 
 void update_lcd() {
@@ -207,6 +208,25 @@ void session_reply() {
 static void session_callback_handler(jack_session_event_t *event, void* arg) {
 	session_event = event;
 	need_ses_reply = true;
+}
+
+void connect_to_physical() {
+	int i;
+	const char **jports;
+
+        jports = jack_get_ports(jack_client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
+        if (jports == NULL)
+		return;
+
+	const char *pname = jack_port_name(inport);
+        for (i=0; jports[i] != NULL; i++) {
+		if (jack_port_connected_to(inport, jports[i]))
+			continue;
+
+                jack_connect(jack_client, jports[i], pname);
+                nLOG("%s -> %s\n", pname, jports[i]);
+        }
+        jack_free(jports);
 }
 
 int process (jack_nframes_t frames, void* arg) {

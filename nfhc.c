@@ -34,6 +34,7 @@ extern void song_send(short SongNumber);
 struct Song* song_new();
 extern void song_update(short SongNumber);
 extern void session_reply();
+extern void connect_to_physical();
 int state_color[3] = { 58, 59, 0 };
 
 static int get_selector_1(CDKSCREEN *cdkscreen) {
@@ -117,7 +118,7 @@ void nLOG(char *fmt, ...) {
 }
 
 void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) {
-    short i, j;
+    short i, j, choke = 0;
     int lm = 0, tm = 0;
     bool lcd_need_update = false;
     CDKSCREEN       *cdkscreen;
@@ -208,6 +209,12 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
 
        /* If Jack need our answer */
        if (*need_ses_reply) session_reply();
+
+       /* Connect physical ports to input */
+       if (choke-- == 0) {
+          connect_to_physical();
+          choke = 10;
+       }
 
        j=getch();
        // Redraw

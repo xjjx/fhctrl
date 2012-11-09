@@ -12,5 +12,8 @@ session_notify: session_notify.c
 lsp: lsp.c
 	$(CC) -g -o $@ $^ -ljack
 
+connect: connect.c
+	$(CC) -g -o $@ $^ -ljack
+
 clean:
-	rm -f fhctrl nfhc session_notify lsp
+	rm -f fhctrl nfhc session_notify lsp connect
