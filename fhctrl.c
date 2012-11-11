@@ -43,6 +43,7 @@ static bool ident_request = false;
 static const SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;
 static SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
 static SysExDumpV1 sysex_dump = SYSEX_DUMP;
+static SysExIdOffer sysex_offer = SYSEX_OFFER;
 
 /* Public variables */
 struct FSTPlug* fst[128] = {NULL};
@@ -51,7 +52,7 @@ bool need_ses_reply = false;
 
 struct LCDScreen lcd_screen;
 
-/* Function */
+/* Functions */
 struct FSTState* state_new() {
 	struct FSTState* fs = calloc(1,sizeof(struct FSTState));
 	fs->state = FST_NA; // Initial state is Inactive
@@ -73,6 +74,16 @@ void fst_new(uint8_t uuid) {
 
 	// Fill our global array
 	fst[uuid] = f;
+}
+
+uint8_t fst_uniqe_id(uint8_t last) {
+	short i;
+	for(i=last+1; i < 128; i++) {
+		if (fst[i] == NULL) return i;
+	}
+	
+	// 0 mean error
+	return 0;
 }
 
 struct FSTPlug* fst_get(uint8_t uuid) {
@@ -232,6 +243,8 @@ void connect_to_physical() {
 int process (jack_nframes_t frames, void* arg) {
 	void* inbuf;
 	void* outbuf;
+	short soi = 0; /* Sysex Offer ID */
+	void *sov[128];
 	jack_nframes_t count;
 	jack_nframes_t i;
 	unsigned short s;
@@ -271,14 +284,18 @@ int process (jack_nframes_t frames, void* arg) {
 
 			SysExIdentReply* r = (SysExIdentReply*) event.buffer;
 			nLOG("Got SysEx Identity Reply from ID %X : %X", r->id, r->model[1]);
-			fp = fst_get(r->model[1]);
-
-			// If this is FSTPlug then dump it state
-			if (r->id == SYSEX_MYID) {
-				// Note: we refresh GUI when Dump back to us
-				fp->dump_request = true;
+			if (r->model[1] == 0) {
+				sov[soi++] = r->version;
 			} else {
-				fp->change = true;
+				fp = fst_get(r->model[1]);
+
+				// If this is FSTPlug then dump it state
+				if (r->id == SYSEX_MYID) {
+					// Note: we refresh GUI when Dump back to us
+					fp->dump_request = true;
+				} else {
+					fp->change = true;
+				}
 			}
 			// don't forward this message
 			continue;
@@ -318,6 +335,14 @@ further:
 		ident_request = false;
 		jack_midi_event_write(outbuf, jack_buffer_size - 1, 
 			(jack_midi_data_t*) &sysex_ident_request, sizeof(SysExIdentRqst));
+	}
+
+	// Send Sysex Offer
+	for (s=0; soi > 0; soi--) {
+		memcpy(sysex_offer.rnid, sov[soi-1], sizeof(sysex_offer.rnid));
+		if ((sysex_offer.uuid = fst_uniqe_id(s)) == 0) break;
+		s = sysex_offer.uuid;
+		jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) &sysex_offer, sizeof(SysExIdOffer));
 	}
 
 	// Send Dump Request
