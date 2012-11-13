@@ -8,12 +8,14 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <assert.h>
 #include <signal.h>
 #include <string.h>
 #include <jack/jack.h>
 #include <jack/midiport.h>
 #include <jack/session.h>
+#include <jack/ringbuffer.h>
 
 #include "sysex.h"
 #include "fhctrl.h"
@@ -35,6 +37,7 @@ static jack_port_t* outport;
 static jack_nframes_t jack_buffer_size;
 static jack_nframes_t jack_sample_rate;
 static jack_session_event_t* session_event;
+static jack_ringbuffer_t* log_collector;
 static short CtrlCh = 15; /* Our default MIDI control channel */
 static short SongCount = 0;
 static short SongSend = -1;
@@ -62,12 +65,12 @@ struct FSTState* state_new() {
 void fst_new(uint8_t uuid) {
 	struct Song* s;
 	struct FSTPlug* f = malloc(sizeof(struct FSTPlug));
-	sprintf(f->name, "Device%d", uuid);
+	snprintf(f->name, sizeof f->name, "Device%d", uuid);
 	f->id = uuid;
 	f->state = state_new();
 	f->change = true;
 
-	// Add to states to songs
+	// Add states to songs
 	for(s = song_first; s; s = s->next) {
 		s->fst_state[uuid] = state_new();
 	}
@@ -104,7 +107,10 @@ struct Song* song_new() {
 		if (fst[i] == NULL) continue;
 
 		s->fst_state[i] = state_new();
+		*s->fst_state[i] = *fst[i]->state;
 	}
+
+	snprintf(s->name, sizeof s->name, "Song %d", SongCount);
 
 	// Bind to song list
 	if (song_first) {
@@ -115,7 +121,6 @@ struct Song* song_new() {
 		song_first = s;
 	}
 
-	sprintf(s->name, "Song %d", SongCount);
 	SongCount++;
 
 	return s;
@@ -221,6 +226,10 @@ static void session_callback_handler(jack_session_event_t *event, void* arg) {
 	need_ses_reply = true;
 }
 
+int cpu_load() {
+	return (int) jack_cpu_load(jack_client);
+}
+
 void connect_to_physical() {
 	int i;
 	const char **jports;
@@ -238,6 +247,40 @@ void connect_to_physical() {
                 nLOG("%s -> %s\n", pname, jports[i]);
         }
         jack_free(jports);
+}
+
+void get_rt_logs() {
+	char info[50];
+	uint8_t len;
+	while (jack_ringbuffer_read_space(log_collector)) {
+		jack_ringbuffer_peek(log_collector, (char*) &len, sizeof len);
+		jack_ringbuffer_read_advance(log_collector, sizeof len);
+
+		jack_ringbuffer_peek(log_collector, (char*) &info, len);
+		jack_ringbuffer_read_advance(log_collector, len);
+
+		nLOG(info);
+	}
+}
+
+void collect_log(char *fmt, ...) {
+	char info[50];
+	va_list args;
+	
+	va_start(args, fmt);
+	vsnprintf(info, sizeof(info), fmt, args);
+	uint8_t len = strlen(info) + 1;
+
+	if (jack_ringbuffer_write_space(log_collector) < len + sizeof len) {
+		nLOG("No space in log collector");
+	} else {
+		// Size of message
+		jack_ringbuffer_write(log_collector, (char*) &len, sizeof len);
+		// Message itself
+		jack_ringbuffer_write(log_collector, (char*) &info, len);
+	}
+
+	va_end(args);
 }
 
 int process (jack_nframes_t frames, void* arg) {
@@ -283,7 +326,7 @@ int process (jack_nframes_t frames, void* arg) {
 			) goto further;
 
 			SysExIdentReply* r = (SysExIdentReply*) event.buffer;
-			nLOG("Got SysEx Identity Reply from ID %X : %X", r->id, r->model[1]);
+			collect_log("Got SysEx ID Reply ID %X : %X", r->id, r->model[1]);
 			if (r->model[1] == 0) {
 				sov[soi++] = r->version;
 			} else {
@@ -291,7 +334,7 @@ int process (jack_nframes_t frames, void* arg) {
 
 				// If this is FSTPlug then dump it state
 				if (r->id == SYSEX_MYID) {
-					// Note: we refresh GUI when Dump back to us
+					// Note: we refresh GUI when bbb cc bvcump back to us
 					fp->dump_request = true;
 				} else {
 					fp->change = true;
@@ -307,7 +350,7 @@ int process (jack_nframes_t frames, void* arg) {
 			if (d->type != SYSEX_TYPE_DUMP)
 				goto further;
 
-			nLOG("Got SysEx Dump %X : %s : %s", d->uuid, d->plugin_name, d->program_name);
+			collect_log("Got SysEx Dump %X : %s : %s", d->uuid, d->plugin_name, d->program_name);
 			fp = fst_get(d->uuid);
 			fp->state->state = d->state;
 			fp->state->program = d->program;
@@ -364,7 +407,7 @@ further:
 	if (song == NULL) return 0;
 	
 	enum State curState;
-	nLOG("Send Song \"%s\" SysEx", song->name);
+	collect_log("Send Song \"%s\" SysEx", song->name);
 	// Dump states via SysEx - for all FST
 	for (s=0; s < 128; s++) {
 		fp = fst[s];
@@ -405,6 +448,12 @@ int main (int argc, char* argv[]) {
 	if (argv[1]) config_file = argv[1];
 	if (argv[2]) uuid = argv[2];
 
+	/* Try change terminal size */
+	printf("\033[8;43;132t");
+
+	log_collector = jack_ringbuffer_create(127 * 50 * sizeof(char));
+	jack_ringbuffer_mlock(log_collector);
+
 	lcd_screen.available = lcd_init();
 	if (lcd_screen.available) {
 		char lcdline[16];
@@ -419,12 +468,7 @@ int main (int argc, char* argv[]) {
 	if (config_file != NULL)
 		load_state(config_file, &song_first, fst);
 
-	if (uuid) {
-		jack_client = jack_client_open (client_name, JackSessionID, NULL, uuid);
-		printf("Sesja: %s\n", uuid);
-	} else {
-		jack_client = jack_client_open (client_name, JackNullOption, NULL);
-	}
+	jack_client = jack_client_open (client_name, JackSessionID, NULL, uuid);
 	if (jack_client == NULL) {
 		fprintf (stderr, "Could not create JACK client.\n");
 		exit (EXIT_FAILURE);

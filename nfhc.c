@@ -9,13 +9,14 @@
 
 #include <stdio.h>
 #include <unistd.h>
-#include <cdk/cdk.h>
+//#include <cdk/cdk.h>
+#include <cdk.h>
 #include "fhctrl.h"
 
 #define LEFT_MARGIN     0   /* Where the plugin boxes start */
 #define RIGHT_MARGIN    80  /* Where the infoboxes start */
 #define TOP_MARGIN      7   /* How much space is reserved for the logo */
-#define LOGWIN_WIDTH    40
+#define LOGWIN_WIDTH    42
 #define CHUJ 38
 #define LABEL_LENGHT CHUJ+11
 
@@ -35,6 +36,8 @@ struct Song* song_new();
 extern void song_update(short SongNumber);
 extern void session_reply();
 extern void connect_to_physical();
+extern int cpu_load();
+extern void get_rt_logs();
 int state_color[3] = { 58, 59, 0 };
 
 static int get_selector_1(CDKSCREEN *cdkscreen) {
@@ -102,16 +105,16 @@ void update_selector(struct labelbox *selector, struct FSTPlug *fp) {
 }
 
 void nLOG(char *fmt, ...) {
-   char info[LOGWIN_WIDTH];
+   char info[LOGWIN_WIDTH-2];
    va_list args;
 
    va_start(args, fmt);
 
-  vsnprintf(info, sizeof(info), fmt, args);
+   vsnprintf(info, sizeof(info), fmt, args);
    if (logwin != NULL) {
       addCDKSwindow(logwin, info, 0);
    } else {
-      printf("%s\n", info);
+     printf("%s\n", info);
    }
 
    va_end(args);
@@ -123,6 +126,7 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
     bool lcd_need_update = false;
     CDKSCREEN       *cdkscreen;
     CDKLABEL        *top_logo;
+    CDKSLIDER       *cpu_usage;
     WINDOW          *screen;
     char            *mesg[9];
     struct labelbox selector[16];
@@ -153,7 +157,7 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
 
     /* Create Song List */
     song_list = newCDKScroll ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+10, RIGHT, 8, 
-          LOGWIN_WIDTH, "</U/63>Select song preset:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE);
+          LOGWIN_WIDTH-1, "</U/63>Select song preset:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE);
 
     song = *song_first;
     while(song) {
@@ -162,6 +166,10 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
     }
 //    bindCDKObject(vSCROLL, song_list, 'q', kurwa_jebana, NULL);
     drawCDKScroll(song_list, TRUE);
+
+    cpu_usage = newCDKSlider ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+20, "CPU USAGE [%]", "", A_REVERSE|' ', 
+                   LOGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE);
+    drawCDKSlider(cpu_usage, FALSE);
 
     /* SELECTOR init - same shit for all boxes */
     {
@@ -211,16 +219,20 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
        if (*need_ses_reply) session_reply();
 
        /* Connect physical ports to input */
-       if (choke-- == 0) {
+       if (! choke--) {
           connect_to_physical();
           choke = 10;
        }
+
+       get_rt_logs();
+       setCDKSliderValue(cpu_usage, cpu_load());
 
        j=getch();
        // Redraw
        drawCDKLabel(top_logo, TRUE);
        drawCDKSwindow(logwin, TRUE);
        drawCDKScroll(song_list, TRUE);
+       drawCDKSlider(cpu_usage, FALSE);
        for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
 //      refreshCDKScreen(cdkscreen);
 
@@ -247,7 +259,7 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
             break;
           case 'n':
             song = song_new();
-       	    addCDKScrollItem(song_list, song->name);
+            addCDKScrollItem(song_list, song->name);
             break;
        }
     }
@@ -255,12 +267,13 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
 //    get_selector_1 (cdkscreen);
     
     /* Clean up */
-    destroyCDKScreen(cdkscreen);
     destroyCDKLabel(top_logo);
     destroyCDKSwindow(logwin);
     logwin = NULL;
     destroyCDKScroll(song_list);
+    destroyCDKSlider(cpu_usage);
     for (i = 0; i < 16; i++) destroyCDKLabel(selector[i].label);
+    destroyCDKScreen(cdkscreen);
 
     endCDK();
 }

@@ -3,7 +3,8 @@
 export VST_PATH='/home/xj/Muzyka/VST'
 #export XTERM='gnome-terminal -e'
 export XTERM='xterm -e'
-export PATH="/home/xj/Muzyka/fsthost/trunk:/home/xj/Muzyka/fhctrl:$PATH"
+#export PATH="/home/xj/Muzyka/fsthost/trunk:/home/xj/Muzyka/fhctrl:$PATH"
+export PATH="/home/studio/SVN/fhctrl:$PATH"
 
 UUID=0
 

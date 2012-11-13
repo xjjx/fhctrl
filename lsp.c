@@ -158,7 +158,7 @@ main (int argc, char *argv[])
 			char *cname = strdup( ports[i] );
 			char *pname = strchr(cname,':') + 1;
 			strchr(cname,':')[0] = '\0';
-			char *uuid = jack_get_uuid_for_client_name(client, cname);
+			char *uuid = (char *) jack_get_uuid_for_client_name(client, cname);
 
 			if (uuid != NULL && strcmp(uuid, "-1")) {
 				printf ("%s:%s\n", uuid, pname);
