@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <signal.h>
 #include <string.h>
+#include <unistd.h>
 #include <jack/jack.h>
 #include <jack/midiport.h>
 #include <jack/session.h>
@@ -160,6 +161,19 @@ void song_update(short SongNumber) {
 	}
 }
 
+// Send SysEx Ident request if found some N/A plugs
+void detect_na() {
+	short i;
+
+	for(i=0; i < 128; i++) {
+		if(! fst[i]) continue;
+		if(fst[i]->state->state == FST_NA) {
+			ident_request = true;
+			return;
+		}
+	}
+}
+
 void send_ident_request() {
 	short i;
 
@@ -173,28 +187,35 @@ void send_ident_request() {
 	nLOG("Sent ident request");
 }
 
+void init_lcd() {
+	lcd_screen.available = lcd_init();
+	if (! lcd_screen.available) return;
+
+	char lcdline[16];
+	snprintf(lcdline, 16, "%s", client_name);
+	lcd_text(0,0,lcdline);
+	snprintf(lcdline, 16, "says HELLO");
+	lcd_text(0,1,lcdline);
+	lcd_screen.fst = NULL;
+}
+
 void update_lcd() {
 	if (! lcd_screen.available)
 		return;
 
 	struct FSTPlug* fp = lcd_screen.fst;
 	if(!fp) return;
-	char line[24];
 
-	// Line 1
+	char line[24];
 	snprintf(line, 24, "D%02d P%02d C%02d V%02d",
 		fp->id,
 		fp->state->program,
 		fp->state->channel,
 		fp->state->volume
 	);
-	lcd_text(0,0,line);
-
-	// Line 2
-	lcd_text(0,1,fp->state->program_name);
-
-	// Line 3
-	lcd_text(0,2,fp->name);
+	lcd_text(0,0,line);			// Line 1
+	lcd_text(0,1,fp->state->program_name);	// Line 2
+	lcd_text(0,2,fp->name);			// Line 3
 }
 
 void session_reply() {
@@ -263,7 +284,7 @@ void get_rt_logs() {
 	}
 }
 
-void collect_log(char *fmt, ...) {
+void collect_rt_logs(char *fmt, ...) {
 	char info[50];
 	va_list args;
 	
@@ -326,7 +347,7 @@ int process (jack_nframes_t frames, void* arg) {
 			) goto further;
 
 			SysExIdentReply* r = (SysExIdentReply*) event.buffer;
-			collect_log("Got SysEx ID Reply ID %X : %X", r->id, r->model[1]);
+			collect_rt_logs("Got SysEx ID Reply ID %X : %X", r->id, r->model[1]);
 			if (r->model[1] == 0) {
 				sov[soi++] = r->version;
 			} else {
@@ -350,7 +371,7 @@ int process (jack_nframes_t frames, void* arg) {
 			if (d->type != SYSEX_TYPE_DUMP)
 				goto further;
 
-			collect_log("Got SysEx Dump %X : %s : %s", d->uuid, d->plugin_name, d->program_name);
+			collect_rt_logs("Got SysEx Dump %X : %s : %s", d->uuid, d->plugin_name, d->program_name);
 			fp = fst_get(d->uuid);
 			fp->state->state = d->state;
 			fp->state->program = d->program;
@@ -407,7 +428,7 @@ further:
 	if (song == NULL) return 0;
 	
 	enum State curState;
-	collect_log("Send Song \"%s\" SysEx", song->name);
+	collect_rt_logs("Send Song \"%s\" SysEx", song->name);
 	// Dump states via SysEx - for all FST
 	for (s=0; s < 128; s++) {
 		fp = fst[s];
@@ -449,31 +470,25 @@ int main (int argc, char* argv[]) {
 	if (argv[2]) uuid = argv[2];
 
 	/* Try change terminal size */
-	printf("\033[8;43;132t");
+	printf("\033[8;43;132t\n");
+	sleep(1); // Time for resize terminal
 
+	// Init log collector
 	log_collector = jack_ringbuffer_create(127 * 50 * sizeof(char));
 	jack_ringbuffer_mlock(log_collector);
 
-	lcd_screen.available = lcd_init();
-	if (lcd_screen.available) {
-		char lcdline[16];
-		snprintf(lcdline, 16, "%s", client_name);
-		lcd_text(0,0,lcdline);
-		snprintf(lcdline, 16, "says HELLO");
-		lcd_text(0,1,lcdline);
-		lcd_screen.fst = NULL;
-	}
+	// Init LCD
+	init_lcd();
 
 	// Try read file
-	if (config_file != NULL)
-		load_state(config_file, &song_first, fst);
+	if (config_file) load_state(config_file, &song_first, fst);
 
+	// Init Jack
 	jack_client = jack_client_open (client_name, JackSessionID, NULL, uuid);
 	if (jack_client == NULL) {
 		fprintf (stderr, "Could not create JACK client.\n");
 		exit (EXIT_FAILURE);
 	}
-
 	jack_set_process_callback (jack_client, process, 0);
 
         if (jack_set_session_callback) {
@@ -481,11 +496,11 @@ int main (int argc, char* argv[]) {
              jack_set_session_callback(jack_client, session_callback_handler, NULL);
         }
 
-	inport = jack_port_register (jack_client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	outport = jack_port_register (jack_client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 	jack_buffer_size = jack_get_buffer_size(jack_client);
 	jack_sample_rate = jack_get_sample_rate(jack_client);
 
+	inport = jack_port_register (jack_client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+	outport = jack_port_register (jack_client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 
 	if ( jack_activate (jack_client) != 0 ) {
 		fprintf (stderr, "Could not activate client.\n");
@@ -495,11 +510,11 @@ int main (int argc, char* argv[]) {
 	// ncurses loop
 	nfhc(&song_first, fst, &need_ses_reply);
 
-	if (lcd_screen.available)
-		lcd_close();
+	// Close LCD
+	if (lcd_screen.available) lcd_close();
 
-	if (config_file != NULL)
-		dump_state(config_file, &song_first, fst);
+	// Save config
+	if (config_file) dump_state(config_file, &song_first, fst);
 
 	return 0;
 }

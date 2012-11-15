@@ -4,7 +4,7 @@ export VST_PATH='/home/xj/Muzyka/VST'
 #export XTERM='gnome-terminal -e'
 export XTERM='xterm -e'
 #export PATH="/home/xj/Muzyka/fsthost/trunk:/home/xj/Muzyka/fhctrl:$PATH"
-export PATH="/home/studio/SVN/fhctrl:$PATH"
+export PATH="/home/studio/SVN/fhctrl:/media/bigpig/secure/XJ/lvst/fsthost/trunk:$PATH"
 
 UUID=0
 
@@ -30,7 +30,7 @@ case $MODE in
 		wait
 		;;
 	'save')
-		session_notify save $SES_PATH > $SES_PATH/session.sh
+		fhctrl_sn save $SES_PATH > $SES_PATH/session.sh
 		echo 'Session Saved'
 		;;
 	*) usage

@@ -36,10 +36,12 @@ struct Song* song_new();
 extern void song_update(short SongNumber);
 extern void session_reply();
 extern void connect_to_physical();
+extern void detect_na();
 extern int cpu_load();
 extern void get_rt_logs();
 int state_color[3] = { 58, 59, 0 };
 
+#if 0
 static int get_selector_1(CDKSCREEN *cdkscreen) {
     char    *title  = "<C>Set a new value:";
     char    *label  = "</U/05>Values:";
@@ -88,6 +90,7 @@ static int get_selector_1(CDKSCREEN *cdkscreen) {
 
     return (choice + 1);
 }
+#endif
 
 void update_selector(struct labelbox *selector, struct FSTPlug *fp) {
    char text[2][LABEL_LENGHT];
@@ -167,7 +170,7 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
 //    bindCDKObject(vSCROLL, song_list, 'q', kurwa_jebana, NULL);
     drawCDKScroll(song_list, TRUE);
 
-    cpu_usage = newCDKSlider ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+20, "CPU USAGE [%]", "", A_REVERSE|' ', 
+    cpu_usage = newCDKSlider ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+17, "DSP LOAD [%]", "", A_REVERSE|' ', 
                    LOGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE);
     drawCDKSlider(cpu_usage, FALSE);
 
@@ -221,6 +224,7 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
        /* Connect physical ports to input */
        if (! choke--) {
           connect_to_physical();
+          detect_na();
           choke = 10;
        }
 

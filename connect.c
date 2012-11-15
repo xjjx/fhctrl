@@ -154,11 +154,9 @@ main (int argc, char *argv[])
 	/* find the two ports */
 
 	short n, w=0;
-	for (n=1; n <= 2; n++) {
-		if ( ! use_uuid || 
-		     uuid2name(client, portName, argv[argc - n], sizeof(portName))
-		) {
-			snprintf( portName, sizeof(portName), "%s", argv[argc - n] );
+	for (n=argc-2; n < argc; n++) {
+		if (!use_uuid || !uuid2name(client, portName, argv[n], sizeof(portName))) {
+			snprintf( portName, sizeof(portName), "%s", argv[n] );
 		}
 
 		while ((port = jack_port_by_name(client, portName)) == 0) {
@@ -171,7 +169,7 @@ main (int argc, char *argv[])
 			fprintf(stderr, "\rWait for %s .. (%d)   ", portName, timeout + 1);
 			sleep(1);
 			// Update uuid2name mapping if needed
-			if (use_uuid) uuid2name(client, portName, argv[argc - n], sizeof(portName));
+			if (use_uuid) uuid2name(client, portName, argv[n], sizeof(portName));
 		}
 		if(w) fprintf(stderr, "\33[2K\r");
 
