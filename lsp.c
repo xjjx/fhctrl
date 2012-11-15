@@ -8,6 +8,7 @@
 #define VERSION "XJ"
 
 #include <jack/jack.h>
+#include <jack/session.h>
 
 char * my_name;
 
