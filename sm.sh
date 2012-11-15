@@ -5,6 +5,7 @@ export VST_PATH='/home/xj/Muzyka/VST'
 export XTERM='xterm -e'
 #export PATH="/home/xj/Muzyka/fsthost/trunk:/home/xj/Muzyka/fhctrl:$PATH"
 export PATH="/home/studio/SVN/fhctrl:/media/bigpig/secure/XJ/lvst/fsthost/trunk:$PATH"
+export FSTHOST_NOGUI=1
 
 UUID=0
 

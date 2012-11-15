@@ -95,12 +95,20 @@ static int get_selector_1(CDKSCREEN *cdkscreen) {
 void update_selector(struct labelbox *selector, struct FSTPlug *fp) {
    char text[2][LABEL_LENGHT];
    char* ptext[2] = { text[0], text[1] };
+   char chtxt[3];
 
-   snprintf(text[0], LABEL_LENGHT,"</U/%d>%03d %-23s | %02d | %02d<!05>",
+
+   if (fp->state->channel == 17) {
+      strcpy(chtxt, "--");
+   } else {
+      snprintf(chtxt, sizeof chtxt, "%02d", fp->state->channel);
+   }
+
+   snprintf(text[0], LABEL_LENGHT,"</U/%d>%03d %-23s | %s | %02d<!05>",
       state_color[fp->state->state], 
       fp->id,
       fp->name,
-      fp->state->channel,
+      chtxt,
       fp->state->volume
    );
    snprintf(text[1], LABEL_LENGHT,"#%02d - %-24s", fp->state->program, fp->state->program_name);
