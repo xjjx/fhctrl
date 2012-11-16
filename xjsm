@@ -7,6 +7,8 @@ export XTERM='screen -T xterm-color -Dm'
 #export PATH="/home/xj/Muzyka/fsthost/trunk:/home/xj/Muzyka/fhctrl:$PATH"
 #export PATH="/home/studio/SVN/fhctrl:/media/bigpig/secure/XJ/lvst/fsthost/trunk:$PATH"
 export FSTHOST_NOGUI=1
+export WINE_RT=${WINE_RT:-10}
+export WINE_SRV_RT=${WINE_SRV_RT:-15}
 
 MODE=$1
 SES_PATH=$2
