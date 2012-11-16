@@ -16,6 +16,29 @@ usage() {
 	exit 1
 }
 
+start_jack() {
+	if ps -eo comm|grep -F 'jackd'; then
+		echo 'Jack Running'
+	else
+		if [ ! -r $HOME/.jackdrc ]; then
+			echo "No file $HOME/.jackdrc"
+			return 1
+		fi
+		(nohup sh -c "$HOME/.jackdrc" >/tmp/jackd.$LOGNAME.log 2>&1 &)
+		sleep 1
+	fi	
+}
+
+start_ses() {
+	SES_SCRIPT=${SES_PATH%/}/session.sh
+
+	if [ ! -r $SES_SCRIPT ]; then
+		echo "No file $SES_SCRIPT"
+		return 1
+	fi
+	. $SES_SCRIPT
+}
+
 [ -z "$MODE" -o -z "$SES_PATH" ] && usage
 
 if [ ! -d "$SES_PATH" ] && ! mkdir "$SES_PATH"; then
@@ -25,7 +48,8 @@ fi
 
 case $MODE in
 	'load')
-		. ${SES_PATH%/}/session.sh
+		start_jack || exit 1
+		start_ses || exit 2
 		jobs -l
 		wait
 		;;
