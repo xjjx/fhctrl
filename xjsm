@@ -32,11 +32,22 @@ start_jack() {
 start_ses() {
 	SES_SCRIPT=${SES_PATH%/}/session.sh
 
+	echo "Starting session: ${SES_PATH%/}"
 	if [ ! -r $SES_SCRIPT ]; then
 		echo "No file $SES_SCRIPT"
 		return 1
 	fi
 	. $SES_SCRIPT
+}
+
+start_wine() {
+	if ps -eo comm|grep -Fq 'wineserver'; then
+		echo 'WineServer running'
+	else
+		echo 'Starting WineServer in persistent mode'
+		wineserver -p || return 1
+	fi
+	return 0
 }
 
 [ -z "$MODE" -o -z "$SES_PATH" ] && usage
@@ -49,7 +60,8 @@ fi
 case $MODE in
 	'load')
 		start_jack || exit 1
-		start_ses || exit 2
+		start_wine || exit 2
+		start_ses || exit 3
 		jobs -l
 		wait
 		;;
