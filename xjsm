@@ -3,7 +3,7 @@
 export VST_PATH="$HOME/VST"
 #export XTERM='gnome-terminal -e'
 #export XTERM='xterm -e'
-export XTERM='screen'
+export XTERM='screen -T xterm-color -Dm'
 #export PATH="/home/xj/Muzyka/fsthost/trunk:/home/xj/Muzyka/fhctrl:$PATH"
 #export PATH="/home/studio/SVN/fhctrl:/media/bigpig/secure/XJ/lvst/fsthost/trunk:$PATH"
 export FSTHOST_NOGUI=1
@@ -17,15 +17,15 @@ usage() {
 }
 
 start_jack() {
-	if ps -eo comm|grep -F 'jackd'; then
+	if ps -eo comm|grep -Fq 'jackd'; then
 		echo 'Jack Running'
 	else
 		if [ ! -r $HOME/.jackdrc ]; then
 			echo "No file $HOME/.jackdrc"
 			return 1
 		fi
-		(nohup sh -c "$HOME/.jackdrc" >/tmp/jackd.$LOGNAME.log 2>&1 &)
-		sleep 1
+		(nohup sh -c ". $HOME/.jackdrc" >/tmp/jackd.$LOGNAME.log 2>&1 &)
+		sleep 3
 	fi	
 }
 
