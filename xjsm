@@ -1,13 +1,12 @@
 #!/bin/sh
 
-export VST_PATH='/home/xj/Muzyka/VST'
+export VST_PATH="$HOME/VST"
 #export XTERM='gnome-terminal -e'
-export XTERM='xterm -e'
+#export XTERM='xterm -e'
+export XTERM='screen'
 #export PATH="/home/xj/Muzyka/fsthost/trunk:/home/xj/Muzyka/fhctrl:$PATH"
-export PATH="/home/studio/SVN/fhctrl:/media/bigpig/secure/XJ/lvst/fsthost/trunk:$PATH"
+#export PATH="/home/studio/SVN/fhctrl:/media/bigpig/secure/XJ/lvst/fsthost/trunk:$PATH"
 export FSTHOST_NOGUI=1
-
-UUID=0
 
 MODE=$1
 SES_PATH=$2

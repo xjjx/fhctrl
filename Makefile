@@ -23,6 +23,7 @@ clean:
 
 install: all
 	install -Dm755 fhctrl $(DESTDIR)/usr/bin/fhctrl
+	install -Dm755 fhctrl $(DESTDIR)/usr/bin/xjsm
 	install -Dm755 fhctrl_sn $(DESTDIR)/usr/bin/fhctrl_sn
 	install -Dm755 fhctrl_lsp $(DESTDIR)/usr/bin/fhctrl_lsp
 	install -Dm755 fhctrl_connect $(DESTDIR)/usr/bin/fhctrl_connect
