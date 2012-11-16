@@ -1,6 +1,6 @@
 #!/bin/sh
 
-export VST_PATH="$HOME/VST"
+export VST_PATH="$HOME/VST:/usr/share/vst"
 #export XTERM='gnome-terminal -e'
 #export XTERM='xterm -e'
 export XTERM='screen -T xterm-color -Dm'
