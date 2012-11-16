@@ -47,6 +47,8 @@ start_wine() {
 		echo 'WineServer running'
 	else
 		echo 'Starting WineServer in persistent mode'
+		wineboot
+		wineserver -k
 		wineserver -p || return 1
 	fi
 	return 0
