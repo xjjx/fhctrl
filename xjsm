@@ -1,9 +1,12 @@
 #!/bin/sh
 
+set -x
+
 export VST_PATH="$HOME/VST:/usr/share/vst"
 #export XTERM='gnome-terminal -e'
 #export XTERM='xterm -e'
-export XTERM='screen -T xterm-color -Dm'
+#export XTERM='screen -T xterm-color -Dm'
+export XTERM='start_in_tmux'
 #export PATH="/home/xj/Muzyka/fsthost/trunk:/home/xj/Muzyka/fhctrl:$PATH"
 #export PATH="/home/studio/SVN/fhctrl:/media/bigpig/secure/XJ/lvst/fsthost/trunk:$PATH"
 export FSTHOST_NOGUI=1
@@ -18,6 +21,10 @@ usage() {
 	exit 1
 }
 
+start_in_tmux() {
+	tmux new -d -x132 -y43 "$*"
+}
+
 start_jack() {
 	if ps -eo comm|grep -Fq 'jackd'; then
 		echo 'Jack Running'
@@ -28,7 +35,8 @@ start_jack() {
 		fi
 		(nohup sh -c ". $HOME/.jackdrc" >/tmp/jackd.$LOGNAME.log 2>&1 &)
 		sleep 3
-	fi	
+	fi
+	return 0
 }
 
 start_ses() {
@@ -40,6 +48,9 @@ start_ses() {
 		return 1
 	fi
 	. $SES_SCRIPT
+	
+	jobs -l
+	wait
 }
 
 start_wine() {
@@ -66,8 +77,6 @@ case $MODE in
 		start_jack || exit 1
 		start_wine || exit 2
 		start_ses || exit 3
-		jobs -l
-		wait
 		;;
 	'save')
 		fhctrl_sn save $SES_PATH > $SES_PATH/session.sh
