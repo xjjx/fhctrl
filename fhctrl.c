@@ -23,9 +23,6 @@
 
 #include "ftdilcd.h"
 
-// Ncurses interface
-extern void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply);
-
 // Config file support
 bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlug **fst);
 bool load_state(const char* config_file, struct Song **song_first, struct FSTPlug **fst);
@@ -52,7 +49,7 @@ static SysExIdOffer sysex_offer = SYSEX_OFFER;
 /* Public variables */
 struct FSTPlug* fst[128] = {NULL};
 struct Song* song_first = NULL;
-bool need_ses_reply = false;
+struct CDKGUI gui;
 
 struct LCDScreen lcd_screen;
 
@@ -239,12 +236,12 @@ void session_reply() {
 //	if (event->type == JackSessionSaveAndQuit)
 
 	jack_session_event_free(session_event);
-	need_ses_reply = false;
+	gui.need_ses_reply = false;
 }
 
 static void session_callback_handler(jack_session_event_t *event, void* arg) {
 	session_event = event;
-	need_ses_reply = true;
+	gui.need_ses_reply = true;
 }
 
 int cpu_load() {
@@ -321,19 +318,24 @@ int process (jack_nframes_t frames, void* arg) {
 	outbuf = jack_port_get_buffer(outport, frames);
 	assert (outbuf);
 	jack_midi_clear_buffer(outbuf);
-	
+
 	count = jack_midi_get_event_count (inbuf);
 	for (i = 0; i < count; ++i) {
 		if (jack_midi_event_get (&event, inbuf, i) != 0)
 			break;
 
+//		collect_rt_logs("MIDI: %X", event.buffer[0]);
+
 		// My Midi control channel handling
-		if ( (event.buffer[0] & 0xF0) == 0xC0 &&
-		     (event.buffer[0] & 0x0F) == CtrlCh
-		) {
-			SongSend = event.buffer[1];
+		if ( (event.buffer[0] & 0x0F) == CtrlCh) {
+			gui.ctrl_midi_in = true;
+
+			if ( (event.buffer[0] & 0xF0) == 0xC0 ) {
+				SongSend = event.buffer[1];
+			}
 			continue;
 		}
+		gui.midi_in = true;
 
 		// Ident Reply
 		if ( event.size < 5 || event.buffer[0] != SYSEX_BEGIN )
@@ -507,8 +509,13 @@ int main (int argc, char* argv[]) {
 		exit (EXIT_FAILURE);
 	}
 
-	// ncurses loop
-	nfhc(&song_first, fst, &need_ses_reply);
+	// ncurses GUI loop
+	gui.song_first = &song_first;
+	gui.fst = fst;
+	gui.need_ses_reply = false;
+	gui.midi_in = false;
+	gui.ctrl_midi_in = false;
+	nfhc(&gui);
 
 	// Close LCD
 	if (lcd_screen.available) lcd_close();

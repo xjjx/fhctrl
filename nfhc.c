@@ -9,8 +9,8 @@
 
 #include <stdio.h>
 #include <unistd.h>
-//#include <cdk/cdk.h>
-#include <cdk.h>
+#include <cdk/cdk.h>
+//#include <cdk.h>
 #include "fhctrl.h"
 
 #define LEFT_MARGIN     0   /* Where the plugin boxes start */
@@ -131,18 +131,23 @@ void nLOG(char *fmt, ...) {
    va_end(args);
 }
 
-void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) {
+void nfhc (struct CDKGUI *gui) {
     short i, j, choke = 0;
     int lm = 0, tm = 0;
+    bool midi_in_state = false;
+    bool ctrl_midi_in_state = false;
     bool lcd_need_update = false;
     CDKSCREEN       *cdkscreen;
     CDKLABEL        *top_logo;
+    CDKLABEL        *midi_light;
+    CDKLABEL        *ctrl_light;
     CDKSLIDER       *cpu_usage;
     WINDOW          *screen;
     char            *mesg[9];
     struct labelbox selector[16];
+    struct FSTPlug **fst = gui->fst;
     struct FSTPlug *fp;
-    struct Song *song;
+    struct Song *song = *gui->song_first;
 
     /* Initialize the Cdk screen.  */
     screen = initscr();
@@ -170,7 +175,6 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
     song_list = newCDKScroll ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+10, RIGHT, 8, 
           LOGWIN_WIDTH-1, "</U/63>Select song preset:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE);
 
-    song = *song_first;
     while(song) {
        addCDKScrollItem(song_list, song->name);
        song = song->next;
@@ -181,6 +185,16 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
     cpu_usage = newCDKSlider ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+17, "DSP LOAD [%]", "", A_REVERSE|' ', 
                    LOGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE);
     drawCDKSlider(cpu_usage, FALSE);
+
+    mesg[0] = "MIDI IN";
+    midi_light = newCDKLabel (cdkscreen, RIGHT_MARGIN, TOP_MARGIN+20, mesg, 1, TRUE, FALSE);
+    setCDKLabelBackgroundColor(midi_light, "</B/64>");
+    drawCDKLabel(midi_light, TRUE);
+
+    mesg[0] = "CTRL IN";
+    ctrl_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 10, TOP_MARGIN+20, mesg, 1, TRUE, FALSE);
+    setCDKLabelBackgroundColor(ctrl_light, "</B/64>");
+    drawCDKLabel(ctrl_light, TRUE);
 
     /* SELECTOR init - same shit for all boxes */
     {
@@ -227,7 +241,7 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
        }
 
        /* If Jack need our answer */
-       if (*need_ses_reply) session_reply();
+       if (gui->need_ses_reply) session_reply();
 
        /* Connect physical ports to input */
        if (! choke--) {
@@ -239,12 +253,26 @@ void nfhc(struct Song **song_first, struct FSTPlug **fst, bool *need_ses_reply) 
        get_rt_logs();
        setCDKSliderValue(cpu_usage, cpu_load());
 
+       if (midi_in_state != gui->midi_in) {
+          midi_in_state = gui->midi_in;
+          setCDKLabelBackgroundColor(midi_light, (midi_in_state) ? "</B/24>" : "</B/64>");
+       }
+       gui->midi_in = false;
+
+       if (ctrl_midi_in_state != gui->ctrl_midi_in) {
+          ctrl_midi_in_state = gui->ctrl_midi_in;
+          setCDKLabelBackgroundColor(ctrl_light, (ctrl_midi_in_state) ? "</B/24>" : "</B/64>");
+       }
+       gui->ctrl_midi_in = false;
+
        j=getch();
        // Redraw
        drawCDKLabel(top_logo, TRUE);
        drawCDKSwindow(logwin, TRUE);
        drawCDKScroll(song_list, TRUE);
        drawCDKSlider(cpu_usage, FALSE);
+       drawCDKLabel(midi_light, TRUE);
+       drawCDKLabel(ctrl_light, TRUE);
        for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
 //      refreshCDKScreen(cdkscreen);
 

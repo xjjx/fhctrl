@@ -39,5 +39,14 @@ struct LCDScreen {
 	struct FSTPlug* fst;
 };
 
+struct CDKGUI {
+	struct Song **song_first;
+	struct FSTPlug **fst;
+	bool need_ses_reply;
+	bool midi_in;
+	bool ctrl_midi_in;
+};
+
+void nfhc(struct CDKGUI *gui);
 void nLOG(char *fmt, ...);
 
