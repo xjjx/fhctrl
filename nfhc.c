@@ -9,8 +9,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
-#include <cdk/cdk.h>
-//#include <cdk.h>
+#include <cdk.h>
 #include "fhctrl.h"
 
 #define LEFT_MARGIN     0   /* Where the plugin boxes start */
