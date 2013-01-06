@@ -33,15 +33,11 @@
 #define TRUE 1
 #define FALSE 0
 
-void
-show_version (char *my_name)
-{
+void show_version (char *my_name) {
 	fprintf (stderr, "%s: JACK Audio Connection Kit version " VERSION "\n", my_name);
 }
 
-void
-show_usage (char *my_name)
-{
+void show_usage (char *my_name) {
 	show_version (my_name);
 	fprintf (stderr, "\nusage: %s [options] port1 port2\n", my_name);
 	fprintf (stderr, "Connects two JACK ports together.\n\n");
@@ -69,9 +65,7 @@ int uuid2name(jack_client_t *client, char* outbuf, char* arg, size_t outbuf_size
 	return 1;
 }
 
-int
-main (int argc, char *argv[])
-{
+int main (int argc, char *argv[]) {
 	jack_client_t *client;
 	jack_status_t status;
 	char *server_name = NULL;
