@@ -4,7 +4,7 @@ DESTDIR =
 
 .PHONY: all,clean
 
-all: fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect njconnect
+all: fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect
 
 fhctrl: nfhc.c config.c ftdilcd.c fhctrl.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack -lconfig -lcdk -lcurses -lftdi
@@ -18,11 +18,8 @@ fhctrl_lsp: lsp.c
 fhctrl_connect: connect.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack
 
-njconnect: njconnect.c
-	$(CC) $(CFLAGS) -o $@ $^ -ljack -lcurses
-
 clean:
-	rm -f fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect njconnect
+	rm -f fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect
 
 install: all
 	install -Dm755 fhctrl $(DESTDIR)/usr/bin/fhctrl
@@ -30,4 +27,3 @@ install: all
 	install -Dm755 fhctrl_sn $(DESTDIR)/usr/bin/fhctrl_sn
 	install -Dm755 fhctrl_lsp $(DESTDIR)/usr/bin/fhctrl_lsp
 	install -Dm755 fhctrl_connect $(DESTDIR)/usr/bin/fhctrl_connect
-	install -Dm755 njconnect $(DESTDIR)/usr/bin/njconnect

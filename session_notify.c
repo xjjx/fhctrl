@@ -27,13 +27,19 @@
 #include <jack/transport.h>
 #include <jack/session.h>
 
+#define CONNECT_APP "fhctr_connect"
+
 typedef struct UNMAP {
 	const char *name;
 	const char *uuid;
 } uuid_map_t;
 
+struct connection {
+	char *src;
+	char *dst;
+};
+
 jack_client_t *client;
-JSList *uuid_map = NULL;
 
 void usage(char *program_name) {
 	fprintf(stderr, "usage: %s quit|save [path]\n", program_name);
@@ -51,32 +57,54 @@ void signal_handler(int sig) {
 	exit(0);
 }
 
-void map_uuid_name ( const char *uuid, const char *name ) {
+void map_uuid_name ( JSList** uuid_map, const char *uuid, const char *name ) {
 	uuid_map_t *mapping = malloc( sizeof(uuid_map_t) );
 	mapping->uuid = uuid;
 	mapping->name = name;
-	uuid_map = jack_slist_append( uuid_map, mapping );
+	*uuid_map = jack_slist_append( *uuid_map, mapping );
 }
 
-void replace_name_by_uuid ( char* buf, size_t size_buf, const char* port_name ) {
+void name2uuid ( JSList** uuid_map, char* buf, const char* name, size_t buf_size ) {
 	JSList *node;
-	char *port_component = strchr( port_name, ':' );
-	char *client_component = strndup( port_name, port_component - port_name );
+	char *port_component = strchr( name, ':' );
+	size_t size = port_component - name;
+	char client_component[size];
 
-	for ( node=uuid_map; node; node=jack_slist_next(node) ) {
-		uuid_map_t *mapping = node->data;
-		if ( ! strcmp( mapping->name, client_component ) ) {
-			snprintf( buf, size_buf, "%s%s", mapping->uuid, port_component );
+	strncpy( client_component, name, size );
+	client_component[size] = '\0'; /* strncpy doesn't handle this */
+
+	for ( node=*uuid_map; node; node=jack_slist_next(node) ) {
+		uuid_map_t *map = node->data;
+		if ( strcmp( map->name, client_component ) == 0 ) {
+			snprintf( buf, buf_size, "%s%s", map->uuid, port_component );
 			return;
 		}
 	}
-	free(client_component);
-	strncpy(buf, port_name, size_buf);
+	strncpy(buf, name, buf_size);
+	buf[buf_size] = '\0'; /* strncpy doesn't handle this */
+}
 
-	return;
+void store_connection(JSList** list, const char* src, const char* dst) {
+	struct connection *c;
+	/* Check is unique */
+	JSList* l;
+	for( l=*list; l; l=jack_slist_next(l) ) {
+		c = l->data;
+		if ( strcmp(c->src, src) == 0 && strcmp(c->dst, dst) == 0 ) {
+//			printf("# Skip duplicate %s -> %s\n", src, dst);
+			return;
+		}
+	}
+	c = malloc( sizeof(struct connection) );
+	c->src = strdup( src );
+	c->dst = strdup( dst );
+	*list = jack_slist_append(*list, c);
 }
 
 int main(int argc, char *argv[]) {
+	JSList *uuid_map = NULL;
+	JSList *connections_list = NULL;
+
 	/* Parse arguments */
 	char *package = basename(argv[0]); /* Program Name */
 	if (argc != 3) usage(package);
@@ -111,59 +139,68 @@ int main(int argc, char *argv[]) {
 
 	jack_activate(client);
 
-	int k,i,j;
-	int exit_code = 0;
+	unsigned short i, j, k;
+	unsigned short exit_code = 0;
 	jack_session_command_t *retval =
 		jack_session_notify( client, NULL, notify_type, save_path );
 	for(i=0; retval[i].uuid; i++ ) {
+		printf( "# UUID: %s | NAME : %s\n", retval[i].uuid, retval[i].client_name );
 		if ( retval[i].flags & JackSessionSaveError) {
 			printf("# %s FAIL\n", retval[i].client_name);
 			exit_code = 1;
 			continue;
 		}
-
-		printf( "# UUID: %s | NAME : %s\n", retval[i].uuid, retval[i].client_name );
 		printf( "export SESSION_DIR=\"%s%s/\"\n", save_path, retval[i].client_name );
 		if ( retval[i].flags & JackSessionNeedTerminal ) {
 			/* ncurses aplications */
 			printf( "$XTERM %s &\n", retval[i].command );
 		} else {
-			/* Other apps aplications */
+			/* Other aplications */
 			printf( "%s &\n", retval[i].command );
 		}
-		map_uuid_name( retval[i].uuid, retval[i].client_name );
-	}
+		printf("\n");
 
-	char srcport[300];
-	char dstport[300];
-	for(k=0; retval[k].uuid; k++ ) {
-		if ( retval[k].flags & JackSessionSaveError ) continue;
+		/* Mapping uuids */
+		map_uuid_name( &uuid_map, retval[i].uuid, retval[i].client_name );
 
 		char* port_regexp = alloca( jack_client_name_size() + 3 );
-//		char* client_name = jack_get_client_name_by_uuid( client, retval[k].uuid );
-		snprintf( port_regexp, sizeof(port_regexp), "%s:.*", retval[k].client_name );
-//		jack_free(client_name);
+		snprintf( port_regexp, sizeof(port_regexp), "^%s:.*", retval[i].client_name );
+
 		const char **ports = jack_get_ports( client, port_regexp, NULL, 0 );
 		if( !ports ) continue;
 
-		for (i = 0; ports[i]; ++i) {
-			const char **connections =
-				jack_port_get_connections( jack_port_by_name(client, ports[i]) );
-			if (! connections) continue;
+		for (j = 0; ports[j]; ++j) {
+			jack_port_t* jack_port = jack_port_by_name( client, ports[j] );
+			int flags = jack_port_flags( jack_port );
 
-			for (j=0; connections[j]; j++) {
-				replace_name_by_uuid( srcport, sizeof(srcport), ports[i] );
-				replace_name_by_uuid( dstport, sizeof(dstport), connections[j] );
-
-				printf( "fhctrl_connect -w 10 -u \"%s\" \"%s\"\n", srcport, dstport );
+			const char **conn = jack_port_get_connections( jack_port );
+			if (! conn) continue;
+			for (k=0; conn[k]; k++) {
+				if ( flags & JackPortIsInput ) {
+					store_connection(&connections_list, conn[k], ports[j]);
+				} else { // assume JackPortIsOutput
+					store_connection(&connections_list, ports[j], conn[k]);
+				}
 			}
-			jack_free (connections);
+			jack_free (conn);
 		}
 		jack_free(ports);
+	}
 
+	JSList* l;
+	char src[300];
+	char dst[300];
+	for( l=connections_list; l; l=jack_slist_next(l) ) {
+		struct connection *c = l->data;
+		name2uuid( &uuid_map, src, c->src, sizeof(src) );
+		name2uuid( &uuid_map, dst, c->dst, sizeof(dst) );
+		printf( "%s -w 10 -u \"%s\" \"%s\"\n", CONNECT_APP, src, dst );
+		free(c->src);
+		free(c->dst);
 	}
 	jack_session_commands_free(retval);
-
+	jack_slist_free(uuid_map);
+	jack_slist_free(connections_list);
 	jack_client_close(client);
 
 	return exit_code;
