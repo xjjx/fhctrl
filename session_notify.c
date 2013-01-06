@@ -27,69 +27,56 @@
 #include <jack/transport.h>
 #include <jack/session.h>
 
-typedef struct {
-	char name[32];
-	char uuid[16];
+typedef struct UNMAP {
+	const char *name;
+	const char *uuid;
 } uuid_map_t;
 
 jack_client_t *client;
 JSList *uuid_map = NULL;
 
-void usage(char *program_name)
-{
+void usage(char *program_name) {
 	fprintf(stderr, "usage: %s quit|save [path]\n", program_name);
 	exit(9);
 }
 
-void jack_shutdown(void *arg)
-{
+void jack_shutdown(void *arg) {
 	fprintf(stderr, "JACK shut down, exiting ...\n");
 	exit(1);
 }
 
-void signal_handler(int sig)
-{
+void signal_handler(int sig) {
 	jack_client_close(client);
 	fprintf(stderr, "signal received, exiting ...\n");
 	exit(0);
 }
 
-void add_uuid_mapping( const char *uuid ) {
-	char *clientname = jack_get_client_name_by_uuid( client, uuid );
-	if( !clientname ) {
-		printf( "error... cant find client for uuid" );
-		return;
-	}
-
+void map_uuid_name ( const char *uuid, const char *name ) {
 	uuid_map_t *mapping = malloc( sizeof(uuid_map_t) );
-	snprintf( mapping->uuid, sizeof(mapping->uuid), "%s", uuid );
-	snprintf( mapping->name, sizeof(mapping->name), "%s", clientname );
+	mapping->uuid = uuid;
+	mapping->name = name;
 	uuid_map = jack_slist_append( uuid_map, mapping );
 }
 
-char *map_port_name_to_uuid_port( const char *port_name )
-{
+void replace_name_by_uuid ( char* buf, size_t size_buf, const char* port_name ) {
 	JSList *node;
-	char retval[300];
-	char *port_component = strchr( port_name,':' );
-	char *client_component = strdup( port_name );
-	strchr( client_component, ':' )[0] = '\0';
+	char *port_component = strchr( port_name, ':' );
+	char *client_component = strndup( port_name, port_component - port_name );
 
-	sprintf( retval, "%s", port_name );
-
-	for( node=uuid_map; node; node=jack_slist_next(node) ) {
+	for ( node=uuid_map; node; node=jack_slist_next(node) ) {
 		uuid_map_t *mapping = node->data;
-		if( !strcmp( mapping->name, client_component ) ) {
-			sprintf( retval, "%s%s", mapping->uuid, port_component );
-			break;
+		if ( ! strcmp( mapping->name, client_component ) ) {
+			snprintf( buf, size_buf, "%s%s", mapping->uuid, port_component );
+			return;
 		}
 	}
+	free(client_component);
+	strncpy(buf, port_name, size_buf);
 
-	return strdup(retval);
+	return;
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
 	/* Parse arguments */
 	char *package = basename(argv[0]); /* Program Name */
 	if (argc != 3) usage(package);
@@ -103,7 +90,7 @@ int main(int argc, char *argv[])
 		usage(package);
 	}
 
-	/* Prase save path (it don't like trailing slash */
+	/* Prase save path (Jack don't like trailing slash */
 	char* save_path = alloca(strlen(argv[2]) + 1);
 	strcpy(save_path, argv[2]);
 	char *last = save_path + strlen(save_path) - 1;
@@ -124,10 +111,10 @@ int main(int argc, char *argv[])
 
 	jack_activate(client);
 
-	jack_session_command_t *retval;
 	int k,i,j;
 	int exit_code = 0;
-	retval = jack_session_notify( client, NULL, notify_type, save_path );
+	jack_session_command_t *retval =
+		jack_session_notify( client, NULL, notify_type, save_path );
 	for(i=0; retval[i].uuid; i++ ) {
 		if ( retval[i].flags & JackSessionSaveError) {
 			printf("# %s FAIL\n", retval[i].client_name);
@@ -135,37 +122,42 @@ int main(int argc, char *argv[])
 			continue;
 		}
 
+		printf( "# UUID: %s | NAME : %s\n", retval[i].uuid, retval[i].client_name );
 		printf( "export SESSION_DIR=\"%s%s/\"\n", save_path, retval[i].client_name );
 		if ( retval[i].flags & JackSessionNeedTerminal ) {
 			/* ncurses aplications */
 			printf( "$XTERM %s &\n", retval[i].command );
 		} else {
+			/* Other apps aplications */
 			printf( "%s &\n", retval[i].command );
 		}
-		add_uuid_mapping(retval[i].uuid); 
+		map_uuid_name( retval[i].uuid, retval[i].client_name );
 	}
 
+	char srcport[300];
+	char dstport[300];
 	for(k=0; retval[k].uuid; k++ ) {
-		if ( retval[k].flags & JackSessionSaveError )
-			continue;
+		if ( retval[k].flags & JackSessionSaveError ) continue;
 
-		char* port_regexp = alloca( jack_client_name_size()+3 );
-		char* client_name = jack_get_client_name_by_uuid( client, retval[k].uuid );
-		snprintf( port_regexp, jack_client_name_size()+3, "%s:.*", client_name );
-		jack_free(client_name);
+		char* port_regexp = alloca( jack_client_name_size() + 3 );
+//		char* client_name = jack_get_client_name_by_uuid( client, retval[k].uuid );
+		snprintf( port_regexp, sizeof(port_regexp), "%s:.*", retval[k].client_name );
+//		jack_free(client_name);
 		const char **ports = jack_get_ports( client, port_regexp, NULL, 0 );
 		if( !ports ) continue;
 
 		for (i = 0; ports[i]; ++i) {
-			const char **connections;
-			if ((connections = jack_port_get_all_connections (client, jack_port_by_name(client, ports[i]))) != 0) {
-				for (j = 0; connections[j]; j++) {
-					char *src = map_port_name_to_uuid_port( ports[i] ); 
-					char *dst = map_port_name_to_uuid_port( connections[j] ); 
-					printf( "fhctrl_connect -w 10 -u \"%s\" \"%s\"\n", src, dst );
-				}
-				jack_free (connections);
-			} 
+			const char **connections =
+				jack_port_get_connections( jack_port_by_name(client, ports[i]) );
+			if (! connections) continue;
+
+			for (j=0; connections[j]; j++) {
+				replace_name_by_uuid( srcport, sizeof(srcport), ports[i] );
+				replace_name_by_uuid( dstport, sizeof(dstport), connections[j] );
+
+				printf( "fhctrl_connect -w 10 -u \"%s\" \"%s\"\n", srcport, dstport );
+			}
+			jack_free (connections);
 		}
 		jack_free(ports);
 
