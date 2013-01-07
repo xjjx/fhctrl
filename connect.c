@@ -49,19 +49,17 @@ void show_usage (char *my_name) {
 	fprintf (stderr, "For more information see http://jackaudio.org/\n");
 }
 
-int uuid2name(jack_client_t *client, char* outbuf, char* arg, size_t outbuf_size) {
-	char *tmpname = strdup( arg );
-	char *portname = strchr( tmpname, ':' );
-	portname[0] = '\0';
-	portname++;
+int uuid2name(jack_client_t *client, char* outbuf, const char* arg, size_t outbuf_size) {
+	char *port_part = strchr( arg, ':' );
+	size_t size = port_part - arg + 1;
+	char uuid[size];
+	snprintf( uuid, size, arg );
 
-	char *clientname = jack_get_client_name_by_uuid( client, tmpname );
-	if ( ! clientname )
-		return 0;
+	const char *clientname = jack_get_client_name_by_uuid( client, uuid );
+	if ( ! clientname ) return 0;
+	if ( outbuf_size < strlen(clientname) + strlen(port_part) + 1) return 0;
 
-	snprintf( outbuf, outbuf_size, "%s:%s", clientname, portname );
-	jack_free( clientname );
-	free(tmpname);
+	snprintf( outbuf, outbuf_size, "%s%s", clientname, port_part );
 	return 1;
 }
 
@@ -139,17 +137,15 @@ int main (int argc, char *argv[]) {
 	}
 
 	/* try to become a client of the JACK server */
-
 	if ((client = jack_client_open (my_name, options, &status, server_name)) == 0) {
 		fprintf (stderr, "jack server not running?\n");
 		return 1;
 	}
 
 	/* find the two ports */
-
 	short n, w=0;
 	for (n=argc-2; n < argc; n++) {
-		if (!use_uuid || !uuid2name(client, portName, argv[n], sizeof(portName))) {
+		if (! use_uuid || ! uuid2name(client, portName, argv[n], sizeof portName ) ) {
 			snprintf( portName, sizeof(portName), "%s", argv[n] );
 		}
 
@@ -186,7 +182,6 @@ int main (int argc, char *argv[]) {
 	/* connect the ports. Note: you can't do this before
 	   the client is activated (this may change in the future).
 	*/
-
 	if (connecting) {
 		if (jack_connect(client, jack_port_name(src_port), jack_port_name(dst_port))) {
 			goto exit;

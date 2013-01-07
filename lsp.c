@@ -20,6 +20,22 @@ show_version (void)
 }
 
 void
+printf_name2uuid (jack_client_t* client, const char* pname)
+{
+	char *port_component = strchr( pname, ':' );
+	size_t csize = port_component - pname + 1;
+	char client_component[csize];
+	snprintf(client_component, csize, pname);
+
+	const char *uuid = jack_get_uuid_for_client_name(client, client_component);
+	if (uuid && strcmp(uuid, "-1") != 0) {
+		printf("%s%s\n", uuid, port_component );
+	} else {
+		printf("%s\n",pname);
+	}
+}
+
+void
 show_usage (void)
 {
 	show_version ();
@@ -46,7 +62,7 @@ main (int argc, char *argv[])
 {
 	jack_client_t *client;
 	jack_status_t status;
-    jack_options_t options = JackNoStartServer;
+	jack_options_t options = JackNoStartServer;
 	const char **ports, **connections;
 	unsigned int i, j, k;
 	int skip_port;
@@ -156,18 +172,7 @@ main (int argc, char *argv[])
 		if(skip_port) continue;
 
 		if (show_uuid) {
-			char *cname = strdup( ports[i] );
-			char *pname = strchr(cname,':') + 1;
-			strchr(cname,':')[0] = '\0';
-			char *uuid = jack_get_uuid_for_client_name(client, cname);
-
-			if (uuid != NULL && strcmp(uuid, "-1")) {
-				printf ("%s:%s\n", uuid, pname);
-			} else {
-				printf ("%s\n", ports[i]);
-			}
-			if(uuid != NULL) jack_free(uuid);
-			free(cname);
+			printf_name2uuid(client, ports[i]);
 		} else {
 			printf ("%s\n", ports[i]);
 		}
@@ -187,9 +192,15 @@ main (int argc, char *argv[])
 		if (show_con) {
 			if ((connections = jack_port_get_all_connections (client, jack_port_by_name(client, ports[i]))) != 0) {
 				for (j = 0; connections[j]; j++) {
-					printf ("   %s\n", connections[j]);
+					printf("   ");
+					if (show_uuid) {
+						printf_name2uuid(client, connections[j]);
+					} else {
+						printf("%s\n", connections[j]);
+					}
+
 				}
-				free (connections);
+				jack_free (connections);
 			} 
 		}
 		if (show_port_latency) {

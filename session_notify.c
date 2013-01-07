@@ -67,11 +67,9 @@ void map_uuid_name ( JSList** uuid_map, const char *uuid, const char *name ) {
 void name2uuid ( JSList** uuid_map, char* buf, const char* name, size_t buf_size ) {
 	JSList *node;
 	char *port_component = strchr( name, ':' );
-	size_t size = port_component - name;
+	size_t size = port_component - name + 1;
 	char client_component[size];
-
-	strncpy( client_component, name, size );
-	client_component[size] = '\0'; /* strncpy doesn't handle this */
+	snprintf(client_component, size, name );
 
 	for ( node=*uuid_map; node; node=jack_slist_next(node) ) {
 		uuid_map_t *map = node->data;
@@ -80,8 +78,7 @@ void name2uuid ( JSList** uuid_map, char* buf, const char* name, size_t buf_size
 			return;
 		}
 	}
-	strncpy(buf, name, buf_size);
-	buf[buf_size] = '\0'; /* strncpy doesn't handle this */
+	snprintf(buf, buf_size, name);
 }
 
 void store_connection(JSList** list, const char* src, const char* dst) {
