@@ -149,10 +149,9 @@ void song_update(short SongNumber) {
 
 	short i;
 	for(i=0; i < 128; i++) {
-		if (fst[i] == NULL) continue;
 		// Do not update state for inactive FSTPlugs
-		if (fst[i]->state->state == FST_NA) continue;
-		*song->fst_state[i] = *fst[i]->state;
+		if (fst[i] && fst[i]->state->state == FST_NA)
+			*song->fst_state[i] = *fst[i]->state;
 	}
 }
 
@@ -161,8 +160,7 @@ void detect_na() {
 	short i;
 
 	for(i=0; i < 128; i++) {
-		if(! fst[i]) continue;
-		if(fst[i]->state->state == FST_NA) {
+		if(fst[i] && fst[i]->state->state == FST_NA) {
 			ident_request = true;
 			return;
 		}
@@ -173,10 +171,7 @@ void send_ident_request() {
 	short i;
 
 	// Reset states to non-active
-	for(i=0; i < 128; i++) {
-		if (fst[i] == NULL) continue;
-		fst[i]->state->state = FST_NA;
-	}
+	for(i=0; i < 128; i++) if (fst[i]) fst[i]->state->state = FST_NA;
 
 	ident_request = true;
 	nLOG("Sent ident request");
@@ -328,9 +323,8 @@ int process (jack_nframes_t frames, void* arg) {
 		if ( (event.buffer[0] & 0x0F) == CtrlCh) {
 			gui.ctrl_midi_in = true;
 
-			if ( (event.buffer[0] & 0xF0) == 0xC0 ) {
+			if( (event.buffer[0] & 0xF0) == 0xC0 )
 				SongSend = event.buffer[1];
-			}
 			continue;
 		}
 		gui.midi_in = true;
@@ -355,7 +349,7 @@ int process (jack_nframes_t frames, void* arg) {
 
 				// If this is FSTPlug then dump it state
 				if (r->id == SYSEX_MYID) {
-					// Note: we refresh GUI when bbb cc bvcump back to us
+					// Note: we refresh GUI when dump back to us
 					fp->dump_request = true;
 				} else {
 					fp->change = true;
@@ -431,30 +425,29 @@ further:
 	collect_rt_logs("Send Song \"%s\" SysEx", song->name);
 	// Dump states via SysEx - for all FST
 	for (s=0; s < 128; s++) {
+		if (!fst[s]) continue;
 		fp = fst[s];
-		if (!fp) continue;
 
 		curState = fp->state->state;
 		*fp->state = *song->fst_state[s];
 		// If plug is NA then keep it state and skip sending to plug
 		if(curState == FST_NA) {
 			fp->state->state = FST_NA;
-			// Update display
-			fp->change = true;
+			fp->change = true; // Update display
 			continue;
 		// If plug is NA in Song then preserve it's current state
 		} else if(fp->state->state == FST_NA) {
 			fp->state->state = curState;
 		}
-		// Update display
-		fp->change = true;
+		fp->change = true; // Update display
 
+		sysex_dump.uuid = fp->id;
 		sysex_dump.program = fp->state->program;
 		sysex_dump.channel = fp->state->channel;
 		sysex_dump.volume = fp->state->volume;
 		sysex_dump.state = fp->state->state;
-		strcpy((char*) sysex_dump.program_name, fp->state->program_name);
-		strcpy((char*) sysex_dump.plugin_name, fp->name);
+		memcpy(sysex_dump.program_name, fp->state->program_name, sizeof(sysex_dump.program_name));
+		memcpy(sysex_dump.plugin_name, fp->name, sizeof(sysex_dump.plugin_name));
 
 		jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) &sysex_dump, sizeof(SysExDumpV1));
 	}

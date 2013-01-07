@@ -112,6 +112,7 @@ void update_selector(struct labelbox *selector, struct FSTPlug *fp) {
    );
    snprintf(text[1], LABEL_LENGHT,"#%02d - %-24s", fp->state->program, fp->state->program_name);
    setCDKLabelMessage(selector->label, ptext, 2);
+   drawCDKLabel(selector->label, TRUE);
 }
 
 void nLOG(char *fmt, ...) {
@@ -251,27 +252,27 @@ void nfhc (struct CDKGUI *gui) {
 
        get_rt_logs();
        setCDKSliderValue(cpu_usage, cpu_load());
+       drawCDKSlider(cpu_usage, FALSE);
 
        if (midi_in_state != gui->midi_in) {
           midi_in_state = gui->midi_in;
           setCDKLabelBackgroundColor(midi_light, (midi_in_state) ? "</B/24>" : "</B/64>");
+          drawCDKLabel(midi_light, TRUE);
        }
        gui->midi_in = false;
 
        if (ctrl_midi_in_state != gui->ctrl_midi_in) {
           ctrl_midi_in_state = gui->ctrl_midi_in;
           setCDKLabelBackgroundColor(ctrl_light, (ctrl_midi_in_state) ? "</B/24>" : "</B/64>");
+          drawCDKLabel(ctrl_light, TRUE);
        }
        gui->ctrl_midi_in = false;
 
        // Redraw
-       drawCDKLabel(top_logo, TRUE);
+//       drawCDKLabel(top_logo, TRUE);
        drawCDKSwindow(logwin, TRUE);
        drawCDKScroll(song_list, TRUE);
-       drawCDKSlider(cpu_usage, FALSE);
-       drawCDKLabel(midi_light, TRUE);
-       drawCDKLabel(ctrl_light, TRUE);
-       for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
+//      for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
 //      refreshCDKScreen(cdkscreen);
 
        j = wgetch(top_logo->win);
