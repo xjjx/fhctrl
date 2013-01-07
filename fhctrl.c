@@ -82,9 +82,7 @@ uint8_t fst_uniqe_id(uint8_t last) {
 	for(i=last+1; i < 128; i++) {
 		if (fst[i] == NULL) return i;
 	}
-	
-	// 0 mean error
-	return 0;
+	return 0; // 0 mean error
 }
 
 struct FSTPlug* fst_get(uint8_t uuid) {

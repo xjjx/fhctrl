@@ -181,17 +181,17 @@ void nfhc (struct CDKGUI *gui) {
 //    bindCDKObject(vSCROLL, song_list, 'q', kurwa_jebana, NULL);
     drawCDKScroll(song_list, TRUE);
 
-    cpu_usage = newCDKSlider ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+17, "DSP LOAD [%]", "", A_REVERSE|' ', 
+    cpu_usage = newCDKSlider ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+18, "DSP LOAD [%]", "", A_REVERSE|' ', 
                    LOGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE);
     drawCDKSlider(cpu_usage, FALSE);
 
     mesg[0] = "MIDI IN";
-    midi_light = newCDKLabel (cdkscreen, RIGHT_MARGIN, TOP_MARGIN+20, mesg, 1, TRUE, FALSE);
+    midi_light = newCDKLabel (cdkscreen, RIGHT_MARGIN, TOP_MARGIN+22, mesg, 1, TRUE, FALSE);
     setCDKLabelBackgroundColor(midi_light, "</B/64>");
     drawCDKLabel(midi_light, TRUE);
 
     mesg[0] = "CTRL IN";
-    ctrl_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 10, TOP_MARGIN+20, mesg, 1, TRUE, FALSE);
+    ctrl_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 10, TOP_MARGIN+22, mesg, 1, TRUE, FALSE);
     setCDKLabelBackgroundColor(ctrl_light, "</B/64>");
     drawCDKLabel(ctrl_light, TRUE);
 
@@ -214,7 +214,7 @@ void nfhc (struct CDKGUI *gui) {
 
     noecho();
     filter();
-    timeout(300);
+    wtimeout(top_logo->win, 300);
 //    cbreak();
     while(! quit) {
        // For our boxes
@@ -264,7 +264,6 @@ void nfhc (struct CDKGUI *gui) {
        }
        gui->ctrl_midi_in = false;
 
-       j=getch();
        // Redraw
        drawCDKLabel(top_logo, TRUE);
        drawCDKSwindow(logwin, TRUE);
@@ -275,6 +274,7 @@ void nfhc (struct CDKGUI *gui) {
        for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
 //      refreshCDKScreen(cdkscreen);
 
+       j = wgetch(top_logo->win);
        switch(j) {
           case 'q': 
                quit=true;
