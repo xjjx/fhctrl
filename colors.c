@@ -1,11 +1,9 @@
-#include <cdk/cdk.h>
+#include <cdk.h>
+#include <string.h>
 
-
-int main() {
-	CDKSWINDOW *colours;
+int main (int argc, char* argv[]) {
 	CDKSCREEN *cdkscreen;
 	WINDOW *screen;
-
 
 	screen = initscr();
 	cdkscreen = initCDKScreen (screen);
@@ -13,26 +11,28 @@ int main() {
 	/* Start CDK Colors */
 	initCDKColor();
 
-	colours = newCDKSwindow (cdkscreen, 0, 0, 33, 64, "</U/63>LOG", 33, FALSE, FALSE);
+	CDKSWINDOW *colours =
+		newCDKSwindow (cdkscreen, 0, 0, 33, 64, "", 33, FALSE, FALSE);
 
 	short i;
 	short j;
-	char txt[128];
+	char txt[164];
 	char tmp[32];
 	for (i = 1; i < 64; i += 8) {
 		*txt = '\0';
 		for(j=0; j < 8; j++) {
-			sprintf(tmp, "</B/%02d>   %02d   <!%02d>", i+j, i+j, i+j);
-			strcat(txt, tmp);
+			snprintf(tmp, sizeof(tmp), "</B/%02d>   %02d   <!%02d>", i+j, i+j, i+j);
+			strncat(txt, tmp, sizeof(txt)-strlen(txt)-1);
 		}
 		addCDKSwindow(colours, txt, 0);
 	}
-
 	drawCDKSwindow(colours, FALSE);
 
-	sleep(30);
+	sleep(5);
 
 	destroyCDKSwindow(colours);
 	destroyCDKScreen(cdkscreen);
 	endCDK();
+
+	return 0;
 }
