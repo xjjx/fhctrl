@@ -27,8 +27,7 @@ int main (int argc, char* argv[]) {
 		addCDKSwindow(colours, txt, 0);
 	}
 	drawCDKSwindow(colours, FALSE);
-
-	sleep(5);
+	wgetch(colours->win);
 
 	destroyCDKSwindow(colours);
 	destroyCDKScreen(cdkscreen);

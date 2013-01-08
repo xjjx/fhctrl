@@ -18,8 +18,11 @@ fhctrl_lsp: lsp.c
 fhctrl_connect: connect.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack
 
+colors: colors.c
+	$(CC) $(CFLAGS) -o $@ $^ -lcdk -lcurses
+
 clean:
-	rm -f fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect
+	rm -f fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect colors
 
 install: all
 	install -Dm755 fhctrl $(DESTDIR)/usr/bin/fhctrl
