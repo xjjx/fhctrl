@@ -150,7 +150,7 @@ int main (int argc, char *argv[]) {
 			snprintf( portName, sizeof(portName), "%s", argv[n] );
 		}
 
-		while ((port = jack_port_by_name(client, portName)) == 0) {
+		while ( ! (port = jack_port_by_name(client, portName)) ) {
 			if (timeout-- < 1) {
 				fprintf (stderr, "\rERROR %s not a valid port\n", portName);
 				goto exit;
@@ -184,8 +184,9 @@ int main (int argc, char *argv[]) {
 	   the client is activated (this may change in the future).
 	*/
 	if (connecting) {
-		if (jack_connect(client, jack_port_name(src_port), jack_port_name(dst_port))) {
-			goto exit;
+		while (jack_connect(client, jack_port_name(src_port), jack_port_name(dst_port)) != 0) {
+			if (timeout-- < 1) goto exit;
+			sleep(1);
 		}
 	}
 
