@@ -75,7 +75,6 @@ int main (int argc, char *argv[]) {
 	jack_port_t *src_port = 0;
 	jack_port_t *dst_port = 0;
 	int port_flags;
-	char portName[300];
 	short use_uuid=0;
 	short timeout=0;
 	short connecting, disconnecting;
@@ -144,6 +143,8 @@ int main (int argc, char *argv[]) {
 
 	/* find the two ports */
 	short n, w=0;
+	int port_name_size = jack_port_name_size();
+	char portName[port_name_size];
 	for (n=argc-2; n < argc; n++) {
 		if (! use_uuid || ! uuid2name(client, portName, argv[n], sizeof portName ) ) {
 			snprintf( portName, sizeof(portName), "%s", argv[n] );

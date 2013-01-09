@@ -254,6 +254,7 @@ main (int argc, char *argv[])
 			}
 		}
 	}
+	printf("NAME SIZE %d\n", jack_port_name_size());
 
 	if (ports)
 		jack_free (ports);

@@ -115,8 +115,9 @@ int main(int argc, char *argv[]) {
 		usage(package);
 	}
 
-	/* Prase save path (Jack don't like trailing slash */
-	char* save_path = alloca(strlen(argv[2]) + 1);
+	/* Parse save path (Jack don't like trailing slash */
+	size_t save_path_size = strlen(argv[2]) + 1;
+	char save_path[save_path_size];
 	strcpy(save_path, argv[2]);
 	char *last = save_path + strlen(save_path) - 1;
 	if (*last != '/') { *(++last) = '/'; *(++last) = '\0'; }
@@ -160,7 +161,8 @@ int main(int argc, char *argv[]) {
 		/* Mapping uuids */
 		map_uuid_name( &uuid_map, retval[i].uuid, retval[i].client_name );
 
-		char* port_regexp = alloca( jack_client_name_size() + 3 );
+		int regexp_size = jack_client_name_size() + 4;
+		char port_regexp[regexp_size];
 		snprintf( port_regexp, sizeof(port_regexp), "^%s:.*", retval[i].client_name );
 
 		const char **ports = jack_get_ports( client, port_regexp, NULL, 0 );
@@ -185,8 +187,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	JSList* l;
-	char src[300];
-	char dst[300];
+	int name_size = jack_port_name_size();
+	char src[name_size];
+	char dst[name_size];
 	for( l=connections_list; l; l=jack_slist_next(l) ) {
 		struct connection *c = l->data;
 		name2uuid( &uuid_map, src, c->src, sizeof(src) );
