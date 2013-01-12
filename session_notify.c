@@ -27,7 +27,7 @@
 #include <jack/transport.h>
 #include <jack/session.h>
 
-#define CONNECT_APP "fhctr_connect"
+#define CONNECT_APP "fhctrl_connect"
 
 typedef struct UNMAP {
 	const char *name;
@@ -139,24 +139,26 @@ int main(int argc, char *argv[]) {
 
 	unsigned short i, j, k;
 	unsigned short exit_code = 0;
+	printf("LOGDIR=${LOGDIR:-/tmp}\n\n");
 	jack_session_command_t *retval =
 		jack_session_notify( client, NULL, notify_type, save_path );
 	for(i=0; retval[i].uuid; i++ ) {
-		printf( "# UUID: %s | NAME : %s\n", retval[i].uuid, retval[i].client_name );
+		printf( "# UUID: %s | NAME : %s ", retval[i].uuid, retval[i].client_name );
 		if ( retval[i].flags & JackSessionSaveError) {
-			printf("# %s FAIL\n", retval[i].client_name);
+			printf("FAIL !!\n");
 			exit_code = 1;
 			continue;
 		}
+		printf( "OK\n");
 		printf( "export SESSION_DIR=\"%s%s/\"\n", save_path, retval[i].client_name );
 		if ( retval[i].flags & JackSessionNeedTerminal ) {
 			/* ncurses aplications */
 			printf( "$XTERM %s &\n", retval[i].command );
 		} else {
 			/* Other aplications */
-			printf( "%s &\n", retval[i].command );
+			printf( "%s > \"$LOGDIR/%s.log\" 2>&1 &\n", retval[i].command, retval[i].client_name );
 		}
-		printf("\n");
+		putchar('\n');
 
 		/* Mapping uuids */
 		map_uuid_name( &uuid_map, retval[i].uuid, retval[i].client_name );
@@ -172,7 +174,7 @@ int main(int argc, char *argv[]) {
 			jack_port_t* jack_port = jack_port_by_name( client, ports[j] );
 			int flags = jack_port_flags( jack_port );
 
-			const char **conn = jack_port_get_connections( jack_port );
+			const char **conn = jack_port_get_all_connections( client, jack_port );
 			if (! conn) continue;
 			for (k=0; conn[k]; k++) {
 				if ( flags & JackPortIsInput ) {
