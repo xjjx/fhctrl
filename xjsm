@@ -92,10 +92,10 @@ ses_save() {
 
 	if fhctrl_sn save "${SES_PATH}.new" > "${SES_PATH}.new/session.sh"; then
 		echo 'Session Saved'
+		ses_clean "${SES_PATH}.broken"
 		ses_clean "${SES_PATH}.old"
 		ses_move "${SES_PATH}" "${SES_PATH}.old"
 		ses_move "${SES_PATH}.new" "${SES_PATH}"
-		ses_clean "${SES_PATH}.broken"
 		return 0
 	else
 		echo 'Fail - session is broken'
