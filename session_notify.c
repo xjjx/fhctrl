@@ -196,7 +196,7 @@ int main(int argc, char *argv[]) {
 		struct connection *c = l->data;
 		name2uuid( &uuid_map, src, c->src, sizeof(src) );
 		name2uuid( &uuid_map, dst, c->dst, sizeof(dst) );
-		printf( "%s -w 10 -u \"%s\" \"%s\"\n", CONNECT_APP, src, dst );
+		printf( "%s -w 60 -u \"%s\" \"%s\"\n", CONNECT_APP, src, dst );
 		free(c->src);
 		free(c->dst);
 	}
