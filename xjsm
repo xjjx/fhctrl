@@ -1,6 +1,6 @@
 #!/bin/sh
 
-set -x
+#set -x
 
 export VST_PATH="$HOME/VST:/usr/share/vst"
 #export XTERM='gnome-terminal -e'
@@ -14,7 +14,8 @@ export WINE_RT=${WINE_RT:-10}
 export WINE_SRV_RT=${WINE_SRV_RT:-15}
 
 MODE=$1
-SES_PATH=$2
+SES_PATH=${2%/}
+LOGDIR='/tmp/log'
 
 usage() {
 	echo "Usage: $0 load|save SessionPath"
@@ -40,7 +41,7 @@ start_jack() {
 }
 
 start_ses() {
-	SES_SCRIPT=${SES_PATH%/}/session.sh
+	SES_SCRIPT=${SES_PATH}/session.sh
 
 	echo "Starting session: ${SES_PATH%/}"
 	if [ ! -r $SES_SCRIPT ]; then
@@ -65,10 +66,45 @@ start_wine() {
 	return 0
 }
 
+# Params: path
+ses_clean() {
+	[ -d "$1" ] && rm -fr "$1"
+}
+
+# Params: src dst
+ses_move() {
+	if [ -d "$1" ]; then
+		echo "Move session directory $1 $2"
+		mv "$1" "$2"
+	fi
+}
+
+ses_save() {
+	ses_clean "${SES_PATH}.new"
+
+	if ! mkdir "${SES_PATH}.new"; then
+		echo "Can't create ${SES_PATH}.new"
+		return 1
+	fi
+
+	if fhctrl_sn save "${SES_PATH}.new" > "${SES_PATH}.new/session.sh"; then
+		echo 'Session Saved'
+		ses_move "${SES_PATH}" "${SES_PATH}.old"
+		ses_move "${SES_PATH}.new" "${SES_PATH}"
+		ses_clean "${SES_PATH}.broken"
+		return 0
+	else
+		echo 'Fail - session is broken'
+		ses_clean "${SES_PATH}.broken"
+		ses_move "${SES_PATH}.new" "${SES_PATH}.broken"
+		return 1
+	fi
+}
+
 [ -z "$MODE" -o -z "$SES_PATH" ] && usage
 
-if [ ! -d "$SES_PATH" ] && ! mkdir "$SES_PATH"; then
-	echo "Session Directory does not exists, and can't create it $SES"
+if [ ! -d "$LOGDIR" ] && ! mkdir "$LOGDIR"; then
+	echo "Log Directory doesn't exists, and can't create it $LOGDIR"
 	exit 1
 fi
 
@@ -78,9 +114,6 @@ case $MODE in
 		start_wine || exit 2
 		start_ses || exit 3
 		;;
-	'save')
-		fhctrl_sn save $SES_PATH > $SES_PATH/session.sh
-		echo 'Session Saved'
-		;;
+	'save') ses_save || exit 4;;
 	*) usage
 esac
