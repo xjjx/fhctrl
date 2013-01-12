@@ -68,7 +68,10 @@ start_wine() {
 
 # Params: path
 ses_clean() {
-	[ -d "$1" ] && rm -fr "$1"
+	if [ -d "$1" ]; then
+		echo "Clean directory $1"
+		rm -fr "$1"
+	fi
 }
 
 # Params: src dst
