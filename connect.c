@@ -53,7 +53,7 @@ int uuid2name(jack_client_t *client, char* outbuf, const char* arg, size_t outbu
 	char *port_part = strchr( arg, ':' );
 	size_t size = port_part - arg + 1;
 	char uuid[size];
-	snprintf( uuid, size, arg );
+	snprintf( uuid, size, "%s", arg );
 
 	const char *clientname = jack_get_client_name_by_uuid( client, uuid );
 	if ( ! clientname ) return 0;
