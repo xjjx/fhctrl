@@ -28,6 +28,7 @@
 #include <jack/session.h>
 
 #define CONNECT_APP "fhctrl_connect"
+#define SKIP_MIDI 1
 
 typedef struct UNMAP {
 	const char *name;
@@ -172,12 +173,19 @@ int main(int argc, char *argv[]) {
 
 		for (j = 0; ports[j]; ++j) {
 			jack_port_t* jack_port = jack_port_by_name( client, ports[j] );
-			int flags = jack_port_flags( jack_port );
+			int port_flags = jack_port_flags( jack_port );
+			const char* type = jack_port_type(jack_port);
+
+#ifdef SKIP_MIDI
+			if ( !strcmp(type, JACK_DEFAULT_MIDI_TYPE) ) continue;
+#endif
 
 			const char **conn = jack_port_get_all_connections( client, jack_port );
 			if (! conn) continue;
 			for (k=0; conn[k]; k++) {
-				if ( flags & JackPortIsInput ) {
+
+
+				if ( port_flags & JackPortIsInput ) {
 					store_connection(&connections_list, conn[k], ports[j]);
 				} else { // assume JackPortIsOutput
 					store_connection(&connections_list, ports[j], conn[k]);
