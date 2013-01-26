@@ -156,7 +156,8 @@ void song_update(short SongNumber) {
 }
 
 // Send SysEx Ident request if found some N/A plugs
-void detect_na() {
+static void
+detect_na() {
 	short i;
 
 	for(i=0; i < 128; i++) {
@@ -208,6 +209,25 @@ void update_lcd() {
 	lcd_text(0,2,fp->name);			// Line 3
 }
 
+static void connect_to_physical() {
+	int i;
+	const char **jports;
+
+        jports = jack_get_ports(jack_client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
+        if (jports == NULL)
+		return;
+
+	const char *pname = jack_port_name(inport);
+        for (i=0; jports[i] != NULL; i++) {
+		if (jack_port_connected_to(inport, jports[i]))
+			continue;
+
+                jack_connect(jack_client, jports[i], pname);
+                nLOG("%s -> %s\n", pname, jports[i]);
+        }
+        jack_free(jports);
+}
+
 void session_reply() {
 	nLOG("session callback");
 
@@ -237,27 +257,18 @@ static void session_callback_handler(jack_session_event_t *event, void* arg) {
 	gui.need_ses_reply = true;
 }
 
-int cpu_load() {
-	return (int) jack_cpu_load(jack_client);
+static int graph_order_callback_handler( void *arg ) {
+	jack_port_t* outport = arg;
+
+	connect_to_physical();
+
+	if ( jack_port_connected(outport) ) detect_na();
+
+	return 0;
 }
 
-void connect_to_physical() {
-	int i;
-	const char **jports;
-
-        jports = jack_get_ports(jack_client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
-        if (jports == NULL)
-		return;
-
-	const char *pname = jack_port_name(inport);
-        for (i=0; jports[i] != NULL; i++) {
-		if (jack_port_connected_to(inport, jports[i]))
-			continue;
-
-                jack_connect(jack_client, jports[i], pname);
-                nLOG("%s -> %s\n", pname, jports[i]);
-        }
-        jack_free(jports);
+int cpu_load() {
+	return (int) jack_cpu_load(jack_client);
 }
 
 void get_rt_logs() {
@@ -482,18 +493,15 @@ int main (int argc, char* argv[]) {
 		fprintf (stderr, "Could not create JACK client.\n");
 		exit (EXIT_FAILURE);
 	}
-	jack_set_process_callback (jack_client, process, 0);
-
-        if (jack_set_session_callback) {
-             printf( "Setting up session callback\n" );
-             jack_set_session_callback(jack_client, session_callback_handler, NULL);
-        }
-
 	jack_buffer_size = jack_get_buffer_size(jack_client);
 	jack_sample_rate = jack_get_sample_rate(jack_client);
 
 	inport = jack_port_register (jack_client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 	outport = jack_port_register (jack_client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+
+	jack_set_process_callback (jack_client, process, 0);
+	jack_set_session_callback(jack_client, session_callback_handler, NULL);
+	jack_set_graph_order_callback(jack_client, graph_order_callback_handler, outport);
 
 	if ( jack_activate (jack_client) != 0 ) {
 		fprintf (stderr, "Could not activate client.\n");

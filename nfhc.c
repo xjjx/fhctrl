@@ -34,8 +34,6 @@ extern void song_send(short SongNumber);
 struct Song* song_new();
 extern void song_update(short SongNumber);
 extern void session_reply();
-extern void connect_to_physical();
-extern void detect_na();
 extern int cpu_load();
 extern void get_rt_logs();
 int state_color[3] = { 58, 59, 0 };
@@ -132,7 +130,7 @@ void nLOG(char *fmt, ...) {
 }
 
 void nfhc (struct CDKGUI *gui) {
-    short i, j, choke = 0;
+    short i, j;
     int lm = 0, tm = 0;
     bool midi_in_state = false;
     bool ctrl_midi_in_state = false;
@@ -243,13 +241,6 @@ void nfhc (struct CDKGUI *gui) {
        /* If Jack need our answer */
        if (gui->need_ses_reply) session_reply();
 
-       /* Connect physical ports to input */
-       if (! choke--) {
-          connect_to_physical();
-          detect_na();
-          choke = 10;
-       }
-
        get_rt_logs();
        setCDKSliderValue(cpu_usage, cpu_load());
        drawCDKSlider(cpu_usage, FALSE);
@@ -269,10 +260,10 @@ void nfhc (struct CDKGUI *gui) {
        gui->ctrl_midi_in = false;
 
        // Redraw
-//       drawCDKLabel(top_logo, TRUE);
+       drawCDKLabel(top_logo, TRUE);
        drawCDKSwindow(logwin, TRUE);
        drawCDKScroll(song_list, TRUE);
-//      for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
+       for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
 //      refreshCDKScreen(cdkscreen);
 
        j = wgetch(top_logo->win);
