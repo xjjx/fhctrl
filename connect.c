@@ -184,13 +184,15 @@ int main (int argc, char *argv[]) {
 	   the client is activated (this may change in the future).
 	*/
 	if (connecting) {
-		while (jack_connect(client, jack_port_name(src_port), jack_port_name(dst_port)) != 0) {
+		int c;
+loop:
+		c = jack_connect(client, jack_port_name(src_port), jack_port_name(dst_port));
+		if (c != 0 && c != EEXIST) {
 			if (timeout-- < 1) goto exit;
 			sleep(1);
+			goto loop;
 		}
-	}
-
-	if (disconnecting) {
+	} else if (disconnecting) {
 		if (jack_disconnect(client, jack_port_name(src_port), jack_port_name(dst_port))) {
 			goto exit;
 		}
