@@ -77,9 +77,7 @@ void fst_new(uint8_t uuid) {
 
 uint8_t fst_uniqe_id() {
 	short i;
-	for(i=0; i < 128; i++) {
-		if (fst[i] == NULL) return i;
-	}
+	for(i=1; i < 128; i++) if (!fst[i]) return i;
 	return 0; // 0 mean error
 }
 
@@ -168,7 +166,7 @@ void send_ident_request() {
 	// Reset states to non-active
 	for(i=0; i < 128; i++) if (fst[i]) fst[i]->state->state = FST_NA;
 
-	nLOG("Sent ident request");
+	nLOG("Send ident request");
 	SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;
 	if ( ! queue_midi_out( (jack_midi_data_t*) &sysex_ident_request, sizeof(SysExIdentRqst) ) )
 		nLOG("SendIdentRequest - buffer full");
@@ -195,11 +193,18 @@ void send_dump_request(short id) {
 		nLOG("SendDumpRequest - buffer full");
 }
 
-void send_offer() {
+void inline send_offer(SysExIdentReply* r) {
 	SysExIdOffer sysex_offer = SYSEX_OFFER;
 	if ( (sysex_offer.uuid = fst_uniqe_id() ) == 0) return;
+	memcpy(sysex_offer.rnid, r->version, sizeof(sysex_offer.rnid));
+	collect_rt_logs("Send Offer %d for %X %X %X %X", sysex_offer.uuid,
+		sysex_offer.rnid[0],
+		sysex_offer.rnid[1],
+		sysex_offer.rnid[2],
+		sysex_offer.rnid[3]
+	);
 	if ( ! queue_midi_out( (jack_midi_data_t*) &sysex_offer, sizeof(SysExIdOffer) ) )
-		nLOG("SendOffer - buffer full");
+		collect_rt_logs("SendOffer - buffer full");
 }
 
 void song_send(short SongNumber) {
@@ -409,7 +414,7 @@ int process (jack_nframes_t frames, void* arg) {
 			SysExIdentReply* r = (SysExIdentReply*) event.buffer;
 			collect_rt_logs("Got SysEx ID Reply ID %X : %X", r->id, r->model[1]);
 			if (r->model[1] == 0) {
-				send_offer();
+				send_offer(r);
 			} else {
 				fp = fst_get(r->model[1]);
 
@@ -451,7 +456,7 @@ int process (jack_nframes_t frames, void* arg) {
 
 further:
 		// Forward messages
-		if (! jack_midi_event_write(outbuf, event.time, event.buffer, event.size) )
+		if (jack_midi_event_write(outbuf, event.time, event.buffer, event.size) )
 			collect_rt_logs("Forward - Write dropped (%d)", jack_midi_max_event_size(outbuf));
 	}
 
@@ -469,7 +474,7 @@ further:
 		jack_ringbuffer_peek(buffer_midi_out, (char*) &tmpbuf, size);
 		jack_ringbuffer_read_advance(buffer_midi_out, size);
 
-		if (! jack_midi_event_write(outbuf, jack_buffer_size - 1, (const jack_midi_data_t *) &tmpbuf, size) )
+		if (jack_midi_event_write(outbuf, jack_buffer_size - 1, (const jack_midi_data_t *) &tmpbuf, size) )
 			collect_rt_logs("SendOur - Write dropped");
 	}
 
