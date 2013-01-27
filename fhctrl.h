@@ -25,7 +25,6 @@ struct FSTPlug {
         char name[24];
         struct FSTState* state;
 	bool change;
-	bool dump_request;
 };
 
 struct Song {
@@ -42,9 +41,10 @@ struct LCDScreen {
 struct CDKGUI {
 	struct Song **song_first;
 	struct FSTPlug **fst;
-	bool need_ses_reply;
 	bool midi_in;
 	bool ctrl_midi_in;
+	bool lcd_need_update;
+	void (*idle_cb)(void);
 };
 
 void nfhc(struct CDKGUI *gui);

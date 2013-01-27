@@ -14,7 +14,7 @@
 
 #define LEFT_MARGIN     0   /* Where the plugin boxes start */
 #define RIGHT_MARGIN    80  /* Where the infoboxes start */
-#define TOP_MARGIN      7   /* How much space is reserved for the logo */
+#define TOP_MARGIN      6   /* How much space is reserved for the logo */
 #define LOGWIN_WIDTH    42
 #define CHUJ 38
 #define LABEL_LENGHT CHUJ+11
@@ -27,15 +27,12 @@ struct labelbox {
 CDKSWINDOW *logwin = NULL;
 CDKSCROLL *song_list;
 bool quit = false;
-extern void send_ident_request(); // From sysex.c
-extern void update_lcd();         // From fhctrl.c
 extern void send_ident_request(); // From fhctrl.c
 extern void song_send(short SongNumber);
 struct Song* song_new();
 extern void song_update(short SongNumber);
-extern void session_reply();
+extern void update_config();
 extern int cpu_load();
-extern void get_rt_logs();
 int state_color[3] = { 58, 59, 0 };
 
 #if 0
@@ -134,7 +131,6 @@ void nfhc (struct CDKGUI *gui) {
     int lm = 0, tm = 0;
     bool midi_in_state = false;
     bool ctrl_midi_in_state = false;
-    bool lcd_need_update = false;
     CDKSCREEN       *cdkscreen;
     CDKLABEL        *top_logo;
     CDKLABEL        *midi_light;
@@ -166,11 +162,11 @@ void nfhc (struct CDKGUI *gui) {
     top_logo = newCDKLabel (cdkscreen, LEFT_MARGIN+10, TOP, mesg, 5, FALSE, FALSE);
     drawCDKLabel(top_logo, TRUE);
 
-    logwin = newCDKSwindow (cdkscreen, RIGHT_MARGIN, TOP_MARGIN, 8, LOGWIN_WIDTH, "</U/63>LOG", 10, TRUE, FALSE);
+    logwin = newCDKSwindow (cdkscreen, RIGHT_MARGIN, TOP_MARGIN, 15, LOGWIN_WIDTH, "</U/63>LOG", 17, TRUE, FALSE);
     drawCDKSwindow(logwin, TRUE);
 
     /* Create Song List */
-    song_list = newCDKScroll ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+10, RIGHT, 8, 
+    song_list = newCDKScroll ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+17, RIGHT, 8, 
           LOGWIN_WIDTH-1, "</U/63>Select song preset:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE);
 
     while(song) {
@@ -180,17 +176,17 @@ void nfhc (struct CDKGUI *gui) {
 //    bindCDKObject(vSCROLL, song_list, 'q', kurwa_jebana, NULL);
     drawCDKScroll(song_list, TRUE);
 
-    cpu_usage = newCDKSlider ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+18, "DSP LOAD [%]", "", A_REVERSE|' ', 
+    cpu_usage = newCDKSlider ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+25, "DSP LOAD [%]", "", A_REVERSE|' ', 
                    LOGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE);
     drawCDKSlider(cpu_usage, FALSE);
 
     mesg[0] = "MIDI IN";
-    midi_light = newCDKLabel (cdkscreen, RIGHT_MARGIN, TOP_MARGIN+22, mesg, 1, TRUE, FALSE);
+    midi_light = newCDKLabel (cdkscreen, RIGHT_MARGIN, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
     setCDKLabelBackgroundColor(midi_light, "</B/64>");
     drawCDKLabel(midi_light, TRUE);
 
     mesg[0] = "CTRL IN";
-    ctrl_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 10, TOP_MARGIN+22, mesg, 1, TRUE, FALSE);
+    ctrl_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 10, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
     setCDKLabelBackgroundColor(ctrl_light, "</B/64>");
     drawCDKLabel(ctrl_light, TRUE);
 
@@ -226,22 +222,15 @@ void nfhc (struct CDKGUI *gui) {
                 break;
 
              fp->change = false;
-             lcd_need_update = true;
+             gui->lcd_need_update = true;
              update_selector(&selector[i], fp);
 
 	     break;
           }
        }
 
-       if (lcd_need_update) {
-          lcd_need_update = false;
-          update_lcd();
-       }
+       if (gui->idle_cb) gui->idle_cb();
 
-       /* If Jack need our answer */
-       if (gui->need_ses_reply) session_reply();
-
-       get_rt_logs();
        setCDKSliderValue(cpu_usage, cpu_load());
        drawCDKSlider(cpu_usage, FALSE);
 
@@ -291,6 +280,10 @@ void nfhc (struct CDKGUI *gui) {
           case 'n':
             song = song_new();
             addCDKScrollItem(song_list, song->name);
+            break;
+          case 'w':
+            // Update config file
+            update_config();
             break;
        }
     }

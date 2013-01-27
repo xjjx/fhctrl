@@ -29,6 +29,7 @@ bool load_state(const char* config_file, struct Song **song_first, struct FSTPlu
 
 /* Out private variables */
 static char const* client_name = "FHControl";
+static char const* config_file = NULL;
 static jack_client_t* jack_client;
 static jack_port_t* inport;
 static jack_port_t* outport;
@@ -36,22 +37,19 @@ static jack_nframes_t jack_buffer_size;
 static jack_nframes_t jack_sample_rate;
 static jack_session_event_t* session_event;
 static jack_ringbuffer_t* log_collector;
+static jack_ringbuffer_t* buffer_midi_out;
 static short CtrlCh = 15; /* Our default MIDI control channel */
 static short SongCount = 0;
-static short SongSend = -1;
-static bool ident_request = false;
-
-static const SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;
-static SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
-static SysExDumpV1 sysex_dump = SYSEX_DUMP;
-static SysExIdOffer sysex_offer = SYSEX_OFFER;
+static bool need_ses_reply = false;
+static bool graph_order_changed = false;
 
 /* Public variables */
 struct FSTPlug* fst[128] = {NULL};
 struct Song* song_first = NULL;
 struct CDKGUI gui;
-
 struct LCDScreen lcd_screen;
+
+static void collect_rt_logs(char *fmt, ...);
 
 /* Functions */
 struct FSTState* state_new() {
@@ -77,9 +75,9 @@ void fst_new(uint8_t uuid) {
 	fst[uuid] = f;
 }
 
-uint8_t fst_uniqe_id(uint8_t last) {
+uint8_t fst_uniqe_id() {
 	short i;
-	for(i=last+1; i < 128; i++) {
+	for(i=0; i < 128; i++) {
 		if (fst[i] == NULL) return i;
 	}
 	return 0; // 0 mean error
@@ -136,10 +134,6 @@ struct Song* song_get(short SongNumber) {
 	return song;
 }
 
-void song_send(short SongNumber) {
-	SongSend = SongNumber;
-}
-
 void song_update(short SongNumber) {
 	struct Song* song = song_get(SongNumber);
 	if(song == NULL) {
@@ -155,16 +149,16 @@ void song_update(short SongNumber) {
 	}
 }
 
-// Send SysEx Ident request if found some N/A plugs
-static void
-detect_na() {
-	short i;
-
-	for(i=0; i < 128; i++) {
-		if(fst[i] && fst[i]->state->state == FST_NA) {
-			ident_request = true;
-			return;
-		}
+bool queue_midi_out(jack_midi_data_t* data, size_t size) {
+	if (jack_ringbuffer_write_space(buffer_midi_out) < size + sizeof(size)) {
+		nLOG("No space in log collector");
+		return false;
+	} else {
+		// Size of message
+		jack_ringbuffer_write(buffer_midi_out, (char*) &size, sizeof size);
+		// Message itself
+		jack_ringbuffer_write(buffer_midi_out, (char*) data, size);
+		return true;
 	}
 }
 
@@ -174,8 +168,78 @@ void send_ident_request() {
 	// Reset states to non-active
 	for(i=0; i < 128; i++) if (fst[i]) fst[i]->state->state = FST_NA;
 
-	ident_request = true;
 	nLOG("Sent ident request");
+	SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;
+	if ( ! queue_midi_out( (jack_midi_data_t*) &sysex_ident_request, sizeof(SysExIdentRqst) ) )
+		nLOG("SendIdentRequest - buffer full");
+
+}
+
+// Send SysEx Ident request if found some N/A plugs
+static void detect_na() {
+	short i;
+
+	for(i=0; i < 128; i++) {
+		if(fst[i] && fst[i]->state->state == FST_NA) {
+			send_ident_request();
+			return;
+		}
+	}
+}
+
+void send_dump_request(short id) {
+	SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
+	sysex_dump_request.uuid = id;
+	nLOG("Sent dump request for ID:%d", id);
+	if ( ! queue_midi_out( (jack_midi_data_t*) &sysex_dump_request, sizeof(SysExDumpRequestV1) ) )
+		nLOG("SendDumpRequest - buffer full");
+}
+
+void send_offer() {
+	SysExIdOffer sysex_offer = SYSEX_OFFER;
+	if ( (sysex_offer.uuid = fst_uniqe_id() ) == 0) return;
+	if ( ! queue_midi_out( (jack_midi_data_t*) &sysex_offer, sizeof(SysExIdOffer) ) )
+		nLOG("SendOffer - buffer full");
+}
+
+void song_send(short SongNumber) {
+	short i;
+	struct FSTPlug* fp;
+	struct Song* song = song_get(SongNumber);
+	if (!song) return;
+	
+	SysExDumpV1 sysex_dump = SYSEX_DUMP;
+	enum State curState;
+	collect_rt_logs("Send Song \"%s\" SysEx", song->name);
+	// Dump states via SysEx - for all FST
+	for (i=0; i < 128; i++) {
+		if (!fst[i]) continue;
+		fp = fst[i];
+
+		curState = fp->state->state;
+		*fp->state = *song->fst_state[i];
+		// If plug is NA then keep it state and skip sending to plug
+		if(curState == FST_NA) {
+			fp->state->state = FST_NA;
+			fp->change = true; // Update display
+			continue;
+		// If plug is NA in Song then preserve it's current state
+		} else if(fp->state->state == FST_NA) {
+			fp->state->state = curState;
+		}
+		fp->change = true; // Update display
+
+		sysex_dump.uuid = fp->id;
+		sysex_dump.program = fp->state->program;
+		sysex_dump.channel = fp->state->channel;
+		sysex_dump.volume = fp->state->volume;
+		sysex_dump.state = fp->state->state;
+		memcpy(sysex_dump.program_name, fp->state->program_name, sizeof(sysex_dump.program_name));
+		memcpy(sysex_dump.plugin_name, fp->name, sizeof(sysex_dump.plugin_name));
+
+		if ( ! queue_midi_out( (jack_midi_data_t*) &sysex_dump, sizeof(SysExDumpV1) ) )
+			nLOG("SendSong (ID:%d) - buffer full", sysex_dump.uuid);
+	}
 }
 
 void init_lcd() {
@@ -191,8 +255,7 @@ void init_lcd() {
 }
 
 void update_lcd() {
-	if (! lcd_screen.available)
-		return;
+	if (! lcd_screen.available) return;
 
 	struct FSTPlug* fp = lcd_screen.fst;
 	if(!fp) return;
@@ -210,17 +273,14 @@ void update_lcd() {
 }
 
 static void connect_to_physical() {
-	int i;
 	const char **jports;
-
         jports = jack_get_ports(jack_client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
-        if (jports == NULL)
-		return;
+        if (jports == NULL) return;
 
 	const char *pname = jack_port_name(inport);
+	int i;
         for (i=0; jports[i] != NULL; i++) {
-		if (jack_port_connected_to(inport, jports[i]))
-			continue;
+		if (jack_port_connected_to(inport, jports[i])) continue;
 
                 jack_connect(jack_client, jports[i], pname);
                 nLOG("%s -> %s\n", pname, jports[i]);
@@ -228,7 +288,7 @@ static void connect_to_physical() {
         jack_free(jports);
 }
 
-void session_reply() {
+static void session_reply() {
 	nLOG("session callback");
 
 	char *restore_cmd = malloc(256);
@@ -249,18 +309,16 @@ void session_reply() {
 //	if (event->type == JackSessionSaveAndQuit)
 
 	jack_session_event_free(session_event);
-	gui.need_ses_reply = false;
 }
 
-static void session_callback_handler(jack_session_event_t *event, void* arg) {
+void session_callback_handler(jack_session_event_t *event, void* arg) {
 	session_event = event;
-	gui.need_ses_reply = true;
+	need_ses_reply = true;
 }
 
-static int graph_order_callback_handler( void *arg ) {
+int graph_order_callback_handler( void *arg ) {
 	jack_port_t* outport = arg;
-
-	connect_to_physical();
+	graph_order_changed = true;
 
 	if ( jack_port_connected(outport) ) detect_na();
 
@@ -271,7 +329,7 @@ int cpu_load() {
 	return (int) jack_cpu_load(jack_client);
 }
 
-void get_rt_logs() {
+static void get_rt_logs() {
 	char info[50];
 	uint8_t len;
 	while (jack_ringbuffer_read_space(log_collector)) {
@@ -285,10 +343,10 @@ void get_rt_logs() {
 	}
 }
 
-void collect_rt_logs(char *fmt, ...) {
+static void collect_rt_logs(char *fmt, ...) {
 	char info[50];
 	va_list args;
-	
+
 	va_start(args, fmt);
 	vsnprintf(info, sizeof(info), fmt, args);
 	uint8_t len = strlen(info) + 1;
@@ -308,11 +366,8 @@ void collect_rt_logs(char *fmt, ...) {
 int process (jack_nframes_t frames, void* arg) {
 	void* inbuf;
 	void* outbuf;
-	short soi = 0; /* Sysex Offer ID */
-	void *sov[128];
 	jack_nframes_t count;
 	jack_nframes_t i;
-	unsigned short s;
 	jack_midi_event_t event;
 	struct FSTPlug* fp;
 
@@ -335,7 +390,7 @@ int process (jack_nframes_t frames, void* arg) {
 			gui.ctrl_midi_in = true;
 
 			if( (event.buffer[0] & 0xF0) == 0xC0 )
-				SongSend = event.buffer[1];
+				song_send(event.buffer[1]);
 			continue;
 		}
 		gui.midi_in = true;
@@ -354,14 +409,14 @@ int process (jack_nframes_t frames, void* arg) {
 			SysExIdentReply* r = (SysExIdentReply*) event.buffer;
 			collect_rt_logs("Got SysEx ID Reply ID %X : %X", r->id, r->model[1]);
 			if (r->model[1] == 0) {
-				sov[soi++] = r->version;
+				send_offer();
 			} else {
 				fp = fst_get(r->model[1]);
 
 				// If this is FSTPlug then dump it state
 				if (r->id == SYSEX_MYID) {
 					// Note: we refresh GUI when dump back to us
-					fp->dump_request = true;
+					send_dump_request(fp->id);
 				} else {
 					fp->change = true;
 				}
@@ -396,78 +451,60 @@ int process (jack_nframes_t frames, void* arg) {
 
 further:
 		// Forward messages
-		jack_midi_event_write(outbuf, event.time, event.buffer, event.size);
+		if (! jack_midi_event_write(outbuf, event.time, event.buffer, event.size) )
+			collect_rt_logs("Forward - Write dropped (%d)", jack_midi_max_event_size(outbuf));
 	}
 
-	// Send Identity Request
-	if (ident_request) {
-		ident_request = false;
-		jack_midi_event_write(outbuf, jack_buffer_size - 1, 
-			(jack_midi_data_t*) &sysex_ident_request, sizeof(SysExIdentRqst));
-	}
-
-	// Send Sysex Offer
-	for (s=0; soi > 0; soi--) {
-		memcpy(sysex_offer.rnid, sov[soi-1], sizeof(sysex_offer.rnid));
-		if ((sysex_offer.uuid = fst_uniqe_id(s)) == 0) break;
-		s = sysex_offer.uuid;
-		jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) &sysex_offer, sizeof(SysExIdOffer));
-	}
-
-	// Send Dump Request
-	for (s=0; s < 128; s++) {
-		fp = fst[s];
-		if (!fp) continue;
-		if (!fp->dump_request) continue;
-		fp->dump_request = false;
-
-		sysex_dump_request.uuid = fp->id;
-		jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) &sysex_dump_request, sizeof(SysExDumpRequestV1));
-	}
-
-	// Send Song
-	if (SongSend < 0) return 0;
-
-	struct Song* song = song_get(SongSend);
-	SongSend = -1;
-	if (song == NULL) return 0;
-	
-	enum State curState;
-	collect_rt_logs("Send Song \"%s\" SysEx", song->name);
-	// Dump states via SysEx - for all FST
-	for (s=0; s < 128; s++) {
-		if (!fst[s]) continue;
-		fp = fst[s];
-
-		curState = fp->state->state;
-		*fp->state = *song->fst_state[s];
-		// If plug is NA then keep it state and skip sending to plug
-		if(curState == FST_NA) {
-			fp->state->state = FST_NA;
-			fp->change = true; // Update display
-			continue;
-		// If plug is NA in Song then preserve it's current state
-		} else if(fp->state->state == FST_NA) {
-			fp->state->state = curState;
+	/* Send our queued messages */
+	while (jack_ringbuffer_read_space(buffer_midi_out)) {
+		size_t size;
+		jack_ringbuffer_peek(buffer_midi_out, (char*) &size, sizeof size);
+		if ( size > jack_midi_max_event_size(outbuf) ) {
+			collect_rt_logs("No more space in midi buffer");
+			break;
 		}
-		fp->change = true; // Update display
+		jack_ringbuffer_read_advance(buffer_midi_out, sizeof size);
+		
+		jack_midi_data_t tmpbuf[size];
+		jack_ringbuffer_peek(buffer_midi_out, (char*) &tmpbuf, size);
+		jack_ringbuffer_read_advance(buffer_midi_out, size);
 
-		sysex_dump.uuid = fp->id;
-		sysex_dump.program = fp->state->program;
-		sysex_dump.channel = fp->state->channel;
-		sysex_dump.volume = fp->state->volume;
-		sysex_dump.state = fp->state->state;
-		memcpy(sysex_dump.program_name, fp->state->program_name, sizeof(sysex_dump.program_name));
-		memcpy(sysex_dump.plugin_name, fp->name, sizeof(sysex_dump.plugin_name));
-
-		jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) &sysex_dump, sizeof(SysExDumpV1));
+		if (! jack_midi_event_write(outbuf, jack_buffer_size - 1, (const jack_midi_data_t *) &tmpbuf, size) )
+			collect_rt_logs("SendOur - Write dropped");
 	}
 
 	return 0;
 }
 
+void update_config() {
+	if (config_file) dump_state(config_file, &song_first, fst);
+}
+
+// Will be called from nfhc
+void idle_cb() {
+	/* Update LCD */
+	if (gui.lcd_need_update) {
+		gui.lcd_need_update = false;
+		update_lcd();
+	}
+
+	/* If Jack need our answer */
+	if (need_ses_reply) {
+		need_ses_reply = false;
+		session_reply();
+	}
+
+	/* discollect RT logs */
+	get_rt_logs();
+
+	/* sdfsdf */
+	if (graph_order_changed) {
+		graph_order_changed = false;
+		connect_to_physical();
+	}
+}
+
 int main (int argc, char* argv[]) {
-	char const* config_file = NULL;
 	char *uuid = NULL;
 
 	if (argv[1]) config_file = argv[1];
@@ -480,6 +517,10 @@ int main (int argc, char* argv[]) {
 	// Init log collector
 	log_collector = jack_ringbuffer_create(127 * 50 * sizeof(char));
 	jack_ringbuffer_mlock(log_collector);
+
+	// Init MIDI Out buffer
+	buffer_midi_out = jack_ringbuffer_create(127 * SYSEX_MAX_SIZE);
+	jack_ringbuffer_mlock(buffer_midi_out);
 
 	// Init LCD
 	init_lcd();
@@ -499,7 +540,7 @@ int main (int argc, char* argv[]) {
 	inport = jack_port_register (jack_client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 	outport = jack_port_register (jack_client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 
-	jack_set_process_callback (jack_client, process, 0);
+	jack_set_process_callback(jack_client, process, 0);
 	jack_set_session_callback(jack_client, session_callback_handler, NULL);
 	jack_set_graph_order_callback(jack_client, graph_order_callback_handler, outport);
 
@@ -511,16 +552,13 @@ int main (int argc, char* argv[]) {
 	// ncurses GUI loop
 	gui.song_first = &song_first;
 	gui.fst = fst;
-	gui.need_ses_reply = false;
 	gui.midi_in = false;
 	gui.ctrl_midi_in = false;
+	gui.idle_cb = idle_cb;
 	nfhc(&gui);
 
 	// Close LCD
 	if (lcd_screen.available) lcd_close();
-
-	// Save config
-	if (config_file) dump_state(config_file, &song_first, fst);
 
 	return 0;
 }
