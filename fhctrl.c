@@ -149,7 +149,7 @@ void song_update(short SongNumber) {
 
 bool queue_midi_out(jack_midi_data_t* data, size_t size) {
 	if (jack_ringbuffer_write_space(buffer_midi_out) < size + sizeof(size)) {
-		nLOG("No space in log collector");
+		nLOG("No space in MIDI OUT buffer");
 		return false;
 	} else {
 		// Size of message
