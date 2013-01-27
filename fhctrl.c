@@ -437,6 +437,12 @@ int process (jack_nframes_t frames, void* arg) {
 				goto further;
 
 			collect_rt_logs("Got SysEx Dump %X : %s : %s", d->uuid, d->plugin_name, d->program_name);
+			/* Dump from address zero is fail - try fix this by drop and send ident req */
+			if (d->uuid == 0) {
+				send_ident_request();
+				continue;
+			}
+
 			fp = fst_get(d->uuid);
 			fp->state->state = d->state;
 			fp->state->program = d->program;
@@ -548,7 +554,7 @@ int main (int argc, char* argv[]) {
 	jack_set_process_callback(jack_client, process, 0);
 	jack_set_session_callback(jack_client, session_callback_handler, NULL);
 	jack_set_graph_order_callback(jack_client, graph_order_callback_handler, outport);
-
+//	jack_set_port_connect_callback(jack_client, connect_callback_handler, ) 	
 	if ( jack_activate (jack_client) != 0 ) {
 		fprintf (stderr, "Could not activate client.\n");
 		exit (EXIT_FAILURE);
