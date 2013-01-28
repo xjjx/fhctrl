@@ -55,11 +55,12 @@ int uuid2name(jack_client_t *client, char* outbuf, const char* arg, size_t outbu
 	char uuid[size];
 	snprintf( uuid, size, "%s", arg );
 
-	const char *clientname = jack_get_client_name_by_uuid( client, uuid );
+	char *clientname = jack_get_client_name_by_uuid( client, uuid );
 	if ( ! clientname ) return 0;
 	if ( outbuf_size < strlen(clientname) + strlen(port_part) + 1) return 0;
 
 	snprintf( outbuf, outbuf_size, "%s%s", clientname, port_part );
+	jack_free(clientname);
 	return 1;
 }
 
