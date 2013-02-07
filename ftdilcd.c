@@ -132,16 +132,14 @@ bool lcd_init() {
     ftdi_set_interface(ftdic, INTERFACE_A);
     f = ftdi_usb_open(ftdic, FTDI_VENDOR, FTDI_PRODUCT);
     if (f < 0) {
-	// TODO: ncurses is not ready here yet
-        printf("FTDI: Can't open device %d\n", f);
+        nLOG("FTDI: Can't open device %d", f);
 	free(ftdic);
         return false;
     }
 
     f = ftdi_set_baudrate(ftdic, FTDI_BAUDRATE);
     if (f < 0) {
-	// TODO: ncurses is not ready here yet
-        printf("FTDI: Can't set baudrate to %d\n", FTDI_BAUDRATE);
+        nLOG("FTDI: Can't set baudrate to %d", FTDI_BAUDRATE);
 	free(ftdic);
         return false;
     }
