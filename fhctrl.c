@@ -176,7 +176,6 @@ void send_ident_request() {
 // Send SysEx Ident request if found some N/A plugs
 static void detect_na() {
 	short i;
-
 	for(i=0; i < 128; i++) {
 		if(fst[i] && fst[i]->state->state == FST_NA) {
 			send_ident_request();
@@ -207,19 +206,33 @@ void inline send_offer(SysExIdentReply* r) {
 		collect_rt_logs("SendOffer - buffer full");
 }
 
+void fst_send(struct FSTPlug* fp) {
+	SysExDumpV1 sysex_dump = SYSEX_DUMP;
+	sysex_dump.uuid = fp->id;
+	sysex_dump.program = fp->state->program;
+	sysex_dump.channel = fp->state->channel;
+	sysex_dump.volume = fp->state->volume;
+	sysex_dump.state = fp->state->state;
+
+	/* NOTE: FSTHost ignoring incoming strings anyway */
+	memcpy(sysex_dump.program_name, fp->state->program_name, sizeof(sysex_dump.program_name));
+	memcpy(sysex_dump.plugin_name, fp->name, sizeof(sysex_dump.plugin_name));
+
+	if ( ! queue_midi_out( (jack_midi_data_t*) &sysex_dump, sizeof(SysExDumpV1) ) )
+		nLOG("SendSong (ID:%d) - buffer full", sysex_dump.uuid);
+}
+
 void song_send(short SongNumber) {
 	short i;
 	struct FSTPlug* fp;
 	struct Song* song = song_get(SongNumber);
 	if (!song) return;
 	
-	SysExDumpV1 sysex_dump = SYSEX_DUMP;
 	enum State curState;
 	collect_rt_logs("Send Song \"%s\" SysEx", song->name);
 	// Dump states via SysEx - for all FST
 	for (i=0; i < 128; i++) {
-		if (!fst[i]) continue;
-		fp = fst[i];
+		if (! (fp = fst[i]) ) continue;
 
 		curState = fp->state->state;
 		*fp->state = *song->fst_state[i];
@@ -234,16 +247,7 @@ void song_send(short SongNumber) {
 		}
 		fp->change = true; // Update display
 
-		sysex_dump.uuid = fp->id;
-		sysex_dump.program = fp->state->program;
-		sysex_dump.channel = fp->state->channel;
-		sysex_dump.volume = fp->state->volume;
-		sysex_dump.state = fp->state->state;
-		memcpy(sysex_dump.program_name, fp->state->program_name, sizeof(sysex_dump.program_name));
-		memcpy(sysex_dump.plugin_name, fp->name, sizeof(sysex_dump.plugin_name));
-
-		if ( ! queue_midi_out( (jack_midi_data_t*) &sysex_dump, sizeof(SysExDumpV1) ) )
-			nLOG("SendSong (ID:%d) - buffer full", sysex_dump.uuid);
+		fst_send(fp);
 	}
 }
 
@@ -324,7 +328,6 @@ void session_callback_handler(jack_session_event_t *event, void* arg) {
 int graph_order_callback_handler( void *arg ) {
 	jack_port_t* outport = arg;
 	graph_order_changed = true;
-
 	if ( jack_port_connected(outport) ) detect_na();
 
 	return 0;

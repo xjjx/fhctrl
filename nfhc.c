@@ -33,64 +33,103 @@ struct Song* song_new();
 extern void song_update(short SongNumber);
 extern void update_config();
 extern int cpu_load();
+extern struct FSTState* state_new();
+extern void fst_send(struct FSTPlug* fp);
+extern void send_dump_request(short id);
 int state_color[3] = { 58, 59, 0 };
 
-#if 0
-static int get_selector_1(CDKSCREEN *cdkscreen) {
-    char    *title  = "<C>Set a new value:";
-    char    *label  = "</U/05>Values:";
-    CDKITEMLIST *valuelist = 0;
-    char    *values[5], *mesg[9];
-    int     choice;
+static int get_value_dialog (CDKSCREEN *cdkscreen, char *title, char *label, char **values, int default_value, int count) {
+    CDKITEMLIST *valuelist;
+    char *mesg[9];
+    char ttitle[20];
+    char tlabel[20];
+    int ret = 0, choice;
 
-    /* Create the choice list. */
-    /* *INDENT-EQLS* */
-    values[0]      = "<C>value 1";
-    values[1]      = "<C>value 2";
-    values[2]      = "<C>value 3";
-    values[3]      = "<C>value 4";
-    values[4]      = "<C>value 5";
+    snprintf(ttitle, sizeof ttitle, "<C>%s:", title);
+    snprintf(tlabel, sizeof tlabel, "</U/05>%s:", label);
 
-    /* Create the itemlist widget. */
-    valuelist = newCDKItemlist (
-        cdkscreen, CENTER, CENTER,
-        title, label, values, 5, 
-        0, /* index of the default value */
-        TRUE, FALSE
-    );
-
-    /* Is the widget null? if so, pass fail code to parent */
-    if (valuelist == 0) {
-        return 0;
-    }
+    valuelist = newCDKItemlist ( cdkscreen, CENTER, CENTER, ttitle, tlabel, values, count, default_value, TRUE, FALSE);
+    if (!valuelist) return 0;
 
     /* Activate the widget. */
-    choice = activateCDKItemlist (valuelist, 0);
+    choice = activateCDKItemlist (valuelist, NULL);
 
     /* Check how they exited from the widget. */
-    if (valuelist->exitType == vESCAPE_HIT) {
-        mesg[0] = "<C>You hit ESC. No value selected.";
-        mesg[1] = "";
-        mesg[2] = "<C>Press any key to continue.";
-        popupLabel (ScreenOf (valuelist), mesg, 3);
-    }
-    else if (valuelist->exitType == vNORMAL) {
+    if (valuelist->exitType == vNORMAL) {
+/*
         mesg[0] = "<C></U>Current selection:";
         mesg[1] = values[choice];
         mesg[2] = "";
         mesg[3] = "<C>Press any key to continue.";
         popupLabel (ScreenOf (valuelist), mesg, 4);
+*/
+        ret = choice + 1;
     }
+    destroyCDKItemlist(valuelist);
 
-    return (choice + 1);
+    return ret;
 }
-#endif
+
+static int edit_selector(CDKSCREEN *cdkscreen, struct FSTPlug **fst) {
+    unsigned short i, count, plug;
+    struct FSTPlug *fp;
+    struct FSTState *fs;
+    char *values[128];
+    unsigned short valfstmap[128];
+
+    /* New temporary state */
+    fs = state_new();
+
+    /* Allocate memory for strings */
+    for (i=0; i < 128; i++) values[i] = alloca( 40 );
+
+    /* Select Plugin */
+    for (i=0, count=0; i < 128; i++) {
+       if (! (fp = fst[i]) ) continue;
+       valfstmap[count] = i;
+       snprintf(values[count++], 40, "<C>%s", fp->name);
+    }
+    plug = get_value_dialog (cdkscreen, "Select device", "Device", values, 0, count);
+    if (!plug) return 0;
+    fp = fst[ valfstmap[--plug] ];
+
+    /* Select State */
+    snprintf(values[0], 40, "<C>Bypass");
+    snprintf(values[1], 40, "<C>Active");
+    fs->state =  get_value_dialog (cdkscreen, "Select state", "State", values, fp->state->state, 2);
+    if (!fs->state) return 0;
+    --fs->state;
+
+    /* Select Channel */
+    for (i=0, count=0; i < 15; i++) snprintf(values[count++], 40, "<C>Channel %d", i);
+    fs->channel = get_value_dialog (cdkscreen, "Select channel", "Channel", values, fp->state->channel, count);
+    if (!fs->channel) return 0;
+    --fs->channel;
+
+    /* Select Preset */
+    for (i=0, count=0; i < 128; i++) snprintf(values[count++], 40, "<C>Preset %d", i);
+    fs->program = get_value_dialog (cdkscreen, "Select program", "Preset", values, fp->state->program, count);
+    if (!fs->program) return 0;
+    --fs->program;
+
+    /* Select Volume */
+    for (i=0, count=0; i < 128; i++) snprintf(values[count++], 40, "<C>%d", i);
+    fs->volume = get_value_dialog (cdkscreen, "Select volume", "Volume", values, fp->state->volume, count);
+    if (!fs->volume) return 0;
+    --fs->volume;
+
+    *fp->state = *fs;
+
+    fst_send(fp);
+    send_dump_request(fp->id);
+
+    return 1;
+}
 
 void update_selector(struct labelbox *selector, struct FSTPlug *fp) {
    char text[2][LABEL_LENGHT];
    char* ptext[2] = { text[0], text[1] };
    char chtxt[3];
-
 
    if (fp->state->channel == 17) {
       strcpy(chtxt, "--");
@@ -285,11 +324,12 @@ void nfhc (struct CDKGUI *gui) {
             // Update config file
             update_config();
             break;
+          case 'e':
+            edit_selector (cdkscreen, fst);
+            break;
        }
     }
 
-//    get_selector_1 (cdkscreen);
-    
     /* Clean up */
     destroyCDKLabel(top_logo);
     destroyCDKSwindow(logwin);
