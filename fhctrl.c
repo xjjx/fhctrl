@@ -1,5 +1,5 @@
 /*
-   FSTHost Control by XJ / Pawel Piatek /
+   FSTHost Control by Xj 
 
    This is part of FSTHost sources
 
@@ -42,6 +42,8 @@ static short CtrlCh = 15; /* Our default MIDI control channel */
 static short SongCount = 0;
 static bool need_ses_reply = false;
 static bool graph_order_changed = false;
+static uint8_t offered_last = 0;
+static uint8_t offered_last_choke = 0;
 
 /* Public variables */
 struct FSTPlug* fst[128] = {NULL};
@@ -75,21 +77,19 @@ void fst_new(uint8_t uuid) {
 	fst[uuid] = f;
 }
 
-uint8_t fst_uniqe_id() {
-	short i;
-	for(i=1; i < 128; i++) if (!fst[i]) return i;
+uint8_t fst_uniqe_id(uint8_t start) {
+	uint8_t i = start;
+	for( ; i < 128; i++) if (!fst[i]) return i;
 	return 0; // 0 mean error
 }
 
 struct FSTPlug* fst_get(uint8_t uuid) {
-	if (fst[uuid] == NULL)
-		fst_new(uuid);
-
+	if (fst[uuid] == NULL) fst_new(uuid);
 	return fst[uuid];	
 }
 
 struct Song* song_new() {
-	short i;
+	uint8_t i;
 	struct Song** snptr;
 	struct Song* s = calloc(1, sizeof(struct Song));
 
@@ -161,7 +161,7 @@ bool queue_midi_out(jack_midi_data_t* data, size_t size) {
 }
 
 void send_ident_request() {
-	short i;
+	uint8_t i;
 
 	// Reset states to non-active
 	for(i=0; i < 128; i++) if (fst[i]) fst[i]->state->state = FST_NA;
@@ -174,8 +174,9 @@ void send_ident_request() {
 }
 
 // Send SysEx Ident request if found some N/A plugs
+/* Currently not used - problem with SPAM - need some choke
 static void detect_na() {
-	short i;
+	uint8_t i;
 	for(i=0; i < 128; i++) {
 		if(fst[i] && fst[i]->state->state == FST_NA) {
 			send_ident_request();
@@ -183,6 +184,7 @@ static void detect_na() {
 		}
 	}
 }
+*/
 
 void send_dump_request(short id) {
 	SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
@@ -194,7 +196,11 @@ void send_dump_request(short id) {
 
 void inline send_offer(SysExIdentReply* r) {
 	SysExIdOffer sysex_offer = SYSEX_OFFER;
-	if ( (sysex_offer.uuid = fst_uniqe_id() ) == 0) return;
+
+	/* No more free id ? :-( */
+	if ( (sysex_offer.uuid = fst_uniqe_id(offered_last + 1) ) == 0) return;
+	offered_last_choke = 10;
+
 	memcpy(sysex_offer.rnid, r->version, sizeof(sysex_offer.rnid));
 	collect_rt_logs("Send Offer %d for %X %X %X %X", sysex_offer.uuid,
 		sysex_offer.rnid[0],
@@ -202,6 +208,7 @@ void inline send_offer(SysExIdentReply* r) {
 		sysex_offer.rnid[2],
 		sysex_offer.rnid[3]
 	);
+	offered_last = sysex_offer.uuid;
 	if ( ! queue_midi_out( (jack_midi_data_t*) &sysex_offer, sizeof(SysExIdOffer) ) )
 		collect_rt_logs("SendOffer - buffer full");
 }
@@ -327,8 +334,9 @@ void session_callback_handler(jack_session_event_t *event, void* arg) {
 
 int graph_order_callback_handler( void *arg ) {
 	jack_port_t* outport = arg;
-	graph_order_changed = true;
-	if ( jack_port_connected(outport) ) detect_na();
+
+	/* If our outport is not connected to anyware - it's no sense to try send anything */
+	if ( jack_port_connected(outport) ) graph_order_changed = true;
 
 	return 0;
 }
@@ -415,20 +423,17 @@ int process (jack_nframes_t frames, void* arg) {
 			) goto further;
 
 			SysExIdentReply* r = (SysExIdentReply*) event.buffer;
-			collect_rt_logs("Got SysEx ID Reply ID %X : %X", r->id, r->model[1]);
-			if (r->model[1] == 0) {
-				send_offer(r);
-			} else {
-				fp = fst_get(r->model[1]);
-
-				// If this is FSTPlug then dump it state
-				if (r->id == SYSEX_MYID) {
-					// Note: we refresh GUI when dump back to us
-					send_dump_request(fp->id);
+			collect_rt_logs("Got SysEx ID Reply ID %X : %X", r->id, r->model[0]);
+			// If this is FSTPlug then try to deal with him ;-)
+			if (r->id == SYSEX_MYID) {
+				if (r->model[0] == 0) {
+					send_offer(r);
 				} else {
-					fp->change = true;
+					// Note: we refresh GUI when dump back to us
+					fp = fst_get(r->model[0]);
+					send_dump_request(fp->id);
 				}
-			}
+			} /* else { Regular device - not supported yet } */
 			// don't forward this message
 			continue;
 		case SYSEX_MYID:
@@ -436,8 +441,7 @@ int process (jack_nframes_t frames, void* arg) {
 				continue;
 
 			SysExDumpV1* d = (SysExDumpV1*) event.buffer;
-			if (d->type != SYSEX_TYPE_DUMP)
-				goto further;
+			if (d->type != SYSEX_TYPE_DUMP) goto further;
 
 			collect_rt_logs("Got SysEx Dump %X : %s : %s", d->uuid, d->plugin_name, d->program_name);
 			/* Dump from address zero is fail - try fix this by drop and send ident req */
@@ -511,10 +515,14 @@ void idle_cb() {
 	/* discollect RT logs */
 	get_rt_logs();
 
-	/* sdfsdf */
 	if (graph_order_changed) {
 		graph_order_changed = false;
 		connect_to_physical();
+	}
+
+	/* Clear last offered (with some choke) */
+	if (offered_last > 0 && --offered_last_choke == 0) {
+		offered_last = 0;
 	}
 }
 

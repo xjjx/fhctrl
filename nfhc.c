@@ -40,7 +40,6 @@ int state_color[3] = { 58, 59, 0 };
 
 static int get_value_dialog (CDKSCREEN *cdkscreen, char *title, char *label, char **values, int default_value, int count) {
     CDKITEMLIST *valuelist;
-    char *mesg[9];
     char ttitle[20];
     char tlabel[20];
     int ret = 0, choice;
@@ -57,6 +56,7 @@ static int get_value_dialog (CDKSCREEN *cdkscreen, char *title, char *label, cha
     /* Check how they exited from the widget. */
     if (valuelist->exitType == vNORMAL) {
 /*
+        char *mesg[9];
         mesg[0] = "<C></U>Current selection:";
         mesg[1] = values[choice];
         mesg[2] = "";
