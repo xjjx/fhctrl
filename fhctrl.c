@@ -41,7 +41,6 @@ static jack_ringbuffer_t* buffer_midi_out;
 static short CtrlCh = 15; /* Our default MIDI control channel */
 static short SongCount = 0;
 static bool need_ses_reply = false;
-static bool graph_order_changed = false;
 static uint8_t offered_last = 0;
 static uint8_t offered_last_choke = 0;
 
@@ -288,22 +287,6 @@ void update_lcd() {
 	lcd_text(0,2,fp->name);			// Line 3
 }
 
-static void connect_to_physical() {
-	const char **jports;
-        jports = jack_get_ports(jack_client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
-        if (jports == NULL) return;
-
-	const char *pname = jack_port_name(inport);
-	int i;
-        for (i=0; jports[i] != NULL; i++) {
-		if (jack_port_connected_to(inport, jports[i])) continue;
-
-                jack_connect(jack_client, jports[i], pname);
-                nLOG("%s -> %s\n", pname, jports[i]);
-        }
-        jack_free(jports);
-}
-
 static void session_reply() {
 	nLOG("session callback");
 
@@ -330,15 +313,6 @@ static void session_reply() {
 void session_callback_handler(jack_session_event_t *event, void* arg) {
 	session_event = event;
 	need_ses_reply = true;
-}
-
-int graph_order_callback_handler( void *arg ) {
-	jack_port_t* outport = arg;
-
-	/* If our outport is not connected to anyware - it's no sense to try send anything */
-	if ( jack_port_connected(outport) ) graph_order_changed = true;
-
-	return 0;
 }
 
 int cpu_load() {
@@ -380,24 +354,20 @@ static void collect_rt_logs(char *fmt, ...) {
 }
 
 int process (jack_nframes_t frames, void* arg) {
-	void* inbuf;
-	void* outbuf;
-	jack_nframes_t count;
-	jack_nframes_t i;
+	jack_nframes_t i, count;
 	jack_midi_event_t event;
 	struct FSTPlug* fp;
 
-	inbuf = jack_port_get_buffer (inport, frames);
+	void* inbuf = jack_port_get_buffer (inport, frames);
 	assert (inbuf);
 
-	outbuf = jack_port_get_buffer(outport, frames);
+	void* outbuf = jack_port_get_buffer(outport, frames);
 	assert (outbuf);
 	jack_midi_clear_buffer(outbuf);
 
 	count = jack_midi_get_event_count (inbuf);
 	for (i = 0; i < count; ++i) {
-		if (jack_midi_event_get (&event, inbuf, i) != 0)
-			break;
+		if (jack_midi_event_get (&event, inbuf, i) != 0) break;
 
 //		collect_rt_logs("MIDI: %X", event.buffer[0]);
 
@@ -412,15 +382,14 @@ int process (jack_nframes_t frames, void* arg) {
 		gui.midi_in = true;
 
 		// Ident Reply
-		if ( event.size < 5 || event.buffer[0] != SYSEX_BEGIN )
-			goto further;
+		if ( event.size < 5 || event.buffer[0] != SYSEX_BEGIN ) continue;
 
 		switch (event.buffer[1]) {
 		case SYSEX_NON_REALTIME:
 			// event.buffer[2] is target_id - in our case always 7F
 			if ( event.buffer[3] != SYSEX_GENERAL_INFORMATION ||
 				event.buffer[4] != SYSEX_IDENTITY_REPLY
-			) goto further;
+			) continue;
 
 			SysExIdentReply* r = (SysExIdentReply*) event.buffer;
 			collect_rt_logs("Got SysEx ID Reply ID %X : %X", r->id, r->model[0]);
@@ -434,14 +403,12 @@ int process (jack_nframes_t frames, void* arg) {
 					send_dump_request(fp->id);
 				}
 			} /* else { Regular device - not supported yet } */
-			// don't forward this message
-			continue;
+			break;
 		case SYSEX_MYID:
-			if (event.size < sizeof(SysExDumpV1))
-				continue;
+			if (event.size < sizeof(SysExDumpV1)) continue;
 
 			SysExDumpV1* d = (SysExDumpV1*) event.buffer;
-			if (d->type != SYSEX_TYPE_DUMP) goto further;
+			if (d->type != SYSEX_TYPE_DUMP) continue;
 
 			collect_rt_logs("Got SysEx Dump %X : %s : %s", d->uuid, d->plugin_name, d->program_name);
 			/* Dump from address zero is fail - try fix this by drop and send ident req */
@@ -462,15 +429,8 @@ int process (jack_nframes_t frames, void* arg) {
 				lcd_screen.fst = fp;
 
 			fp->change = true;
-
-			// don't forward this message
-			continue;
+			break;
 		}
-
-further:
-		// Forward messages
-		if (jack_midi_event_write(outbuf, event.time, event.buffer, event.size) )
-			collect_rt_logs("Forward - Write dropped (%d)", jack_midi_max_event_size(outbuf));
 	}
 
 	/* Send our queued messages */
@@ -514,11 +474,6 @@ void idle_cb() {
 
 	/* discollect RT logs */
 	get_rt_logs();
-
-	if (graph_order_changed) {
-		graph_order_changed = false;
-		connect_to_physical();
-	}
 
 	/* Clear last offered (with some choke) */
 	if (offered_last > 0 && --offered_last_choke == 0) {
@@ -564,7 +519,6 @@ int main (int argc, char* argv[]) {
 
 	jack_set_process_callback(jack_client, process, 0);
 	jack_set_session_callback(jack_client, session_callback_handler, NULL);
-	jack_set_graph_order_callback(jack_client, graph_order_callback_handler, outport);
 //	jack_set_port_connect_callback(jack_client, connect_callback_handler, ) 	
 	if ( jack_activate (jack_client) != 0 ) {
 		fprintf (stderr, "Could not activate client.\n");
