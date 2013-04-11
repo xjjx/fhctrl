@@ -555,8 +555,8 @@ int main (int argc, char* argv[]) {
 	jack_buffer_size = jack_get_buffer_size(jack_client);
 	jack_sample_rate = jack_get_sample_rate(jack_client);
 
-	inport = jack_port_register (jack_client, "forward_input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	forward_input = jack_port_register (jack_client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+	inport = jack_port_register (jack_client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+	forward_input = jack_port_register (jack_client, "forward_input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 	outport = jack_port_register (jack_client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 	forward_output = jack_port_register (jack_client, "forward_output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 
