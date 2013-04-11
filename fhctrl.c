@@ -31,16 +31,14 @@ bool load_state(const char* config_file, struct Song **song_first, struct FSTPlu
 static char const* client_name = "FHControl";
 static char const* config_file = NULL;
 static jack_client_t* jack_client;
-static jack_port_t* inport;
-static jack_port_t* outport;
-static jack_nframes_t jack_buffer_size;
-static jack_nframes_t jack_sample_rate;
+static jack_port_t *inport, *outport, *forward_input, *forward_output;
+static jack_nframes_t jack_buffer_size, jack_sample_rate;
 static jack_session_event_t* session_event;
-static jack_ringbuffer_t* log_collector;
-static jack_ringbuffer_t* buffer_midi_out;
+static jack_ringbuffer_t *log_collector, *buffer_midi_out;
 static short CtrlCh = 15; /* Our default MIDI control channel */
 static short SongCount = 0;
 static bool need_ses_reply = false;
+static bool try_connect_to_physical = true; /* try on start */
 static uint8_t offered_last = 0;
 static uint8_t offered_last_choke = 0;
 
@@ -310,9 +308,28 @@ static void session_reply() {
 	jack_session_event_free(session_event);
 }
 
+static void connect_to_physical() {
+	const char **jports;
+	jports = jack_get_ports(jack_client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
+	if (jports == NULL) return;
+	
+	const char *pname = jack_port_name(inport);
+	int i;
+	for (i=0; jports[i] != NULL; i++) {
+		if (jack_port_connected_to(inport, jports[i])) continue;
+		jack_connect(jack_client, jports[i], pname);
+		nLOG("%s -> %s\n", pname, jports[i]);
+	}
+	jack_free(jports);
+}
+
 void session_callback_handler(jack_session_event_t *event, void* arg) {
 	session_event = event;
 	need_ses_reply = true;
+}
+
+void registration_handler(jack_port_id_t port_id, int reg, void *arg) {
+	if (reg != 0) try_connect_to_physical = true;
 }
 
 int cpu_load() {
@@ -354,14 +371,15 @@ static void collect_rt_logs(char *fmt, ...) {
 }
 
 int process (jack_nframes_t frames, void* arg) {
+	void *inbuf, *outbuf;
 	jack_nframes_t i, count;
 	jack_midi_event_t event;
 	struct FSTPlug* fp;
 
-	void* inbuf = jack_port_get_buffer (inport, frames);
+	inbuf = jack_port_get_buffer (inport, frames);
 	assert (inbuf);
 
-	void* outbuf = jack_port_get_buffer(outport, frames);
+	outbuf = jack_port_get_buffer(outport, frames);
 	assert (outbuf);
 	jack_midi_clear_buffer(outbuf);
 
@@ -451,6 +469,23 @@ int process (jack_nframes_t frames, void* arg) {
 			collect_rt_logs("SendOur - Write dropped");
 	}
 
+	/* Forward port handling */
+	inbuf = jack_port_get_buffer (forward_input, frames);
+	assert (inbuf);
+
+	outbuf = jack_port_get_buffer(forward_output, frames);
+	assert (outbuf);
+	jack_midi_clear_buffer(outbuf);
+
+	count = jack_midi_get_event_count (inbuf);
+	for (i = 0; i < count; ++i) {
+		if (jack_midi_event_get (&event, inbuf, i) != 0) break;
+		if (jack_midi_event_write(outbuf, event.time, event.buffer, event.size) ) {
+			collect_rt_logs("Forward - Write dropped (buffer size: %d)", jack_midi_max_event_size(outbuf));
+			break;
+		}
+	}
+
 	return 0;
 }
 
@@ -470,6 +505,12 @@ void idle_cb() {
 	if (need_ses_reply) {
 		need_ses_reply = false;
 		session_reply();
+	}
+
+	/* Try connect to physical ports */
+	if (try_connect_to_physical) {
+		try_connect_to_physical = false;
+		connect_to_physical();
 	}
 
 	/* discollect RT logs */
@@ -514,11 +555,14 @@ int main (int argc, char* argv[]) {
 	jack_buffer_size = jack_get_buffer_size(jack_client);
 	jack_sample_rate = jack_get_sample_rate(jack_client);
 
-	inport = jack_port_register (jack_client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+	inport = jack_port_register (jack_client, "forward_input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+	forward_input = jack_port_register (jack_client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 	outport = jack_port_register (jack_client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+	forward_output = jack_port_register (jack_client, "forward_output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 
 	jack_set_process_callback(jack_client, process, 0);
 	jack_set_session_callback(jack_client, session_callback_handler, NULL);
+	jack_set_port_registration_callback( jack_client, registration_handler, NULL);
 //	jack_set_port_connect_callback(jack_client, connect_callback_handler, ) 	
 	if ( jack_activate (jack_client) != 0 ) {
 		fprintf (stderr, "Could not activate client.\n");
