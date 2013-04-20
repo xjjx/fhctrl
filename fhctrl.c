@@ -31,7 +31,7 @@ bool load_state(const char* config_file, struct Song **song_first, struct FSTPlu
 static char const* client_name = "FHControl";
 static char const* config_file = NULL;
 static jack_client_t* jack_client;
-static jack_port_t *inport, *outport, *forward_input, *forward_output;
+static jack_port_t *inport, *outport, *forward_inport, *forward_outport;
 static jack_nframes_t jack_buffer_size, jack_sample_rate;
 static jack_session_event_t* session_event;
 static jack_ringbuffer_t *log_collector, *buffer_midi_out;
@@ -313,10 +313,10 @@ static void connect_to_physical() {
 	jports = jack_get_ports(jack_client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
 	if (jports == NULL) return;
 	
-	const char *pname = jack_port_name(inport);
+	const char *pname = jack_port_name(forward_inport);
 	int i;
 	for (i=0; jports[i] != NULL; i++) {
-		if (jack_port_connected_to(inport, jports[i])) continue;
+		if (jack_port_connected_to(forward_inport, jports[i])) continue;
 		jack_connect(jack_client, jports[i], pname);
 		nLOG("%s -> %s\n", pname, jports[i]);
 	}
@@ -327,6 +327,17 @@ void session_callback_handler(jack_session_event_t *event, void* arg) {
 	session_event = event;
 	need_ses_reply = true;
 }
+
+/*
+int graph_order_callback_handler( void *arg ) {
+	jack_port_t* outport = arg;
+
+	// If our outport is not connected to anyware - it's no sense to try send anything
+	if ( jack_port_connected(outport) ) graph_order_changed = true;
+
+	return 0;
+}
+*/
 
 void registration_handler(jack_port_id_t port_id, int reg, void *arg) {
 	if (reg != 0) try_connect_to_physical = true;
@@ -470,10 +481,10 @@ int process (jack_nframes_t frames, void* arg) {
 	}
 
 	/* Forward port handling */
-	inbuf = jack_port_get_buffer (forward_input, frames);
+	inbuf = jack_port_get_buffer (forward_inport, frames);
 	assert (inbuf);
 
-	outbuf = jack_port_get_buffer(forward_output, frames);
+	outbuf = jack_port_get_buffer(forward_outport, frames);
 	assert (outbuf);
 	jack_midi_clear_buffer(outbuf);
 
@@ -556,13 +567,14 @@ int main (int argc, char* argv[]) {
 	jack_sample_rate = jack_get_sample_rate(jack_client);
 
 	inport = jack_port_register (jack_client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	forward_input = jack_port_register (jack_client, "forward_input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+	forward_inport = jack_port_register (jack_client, "forward_input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 	outport = jack_port_register (jack_client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
-	forward_output = jack_port_register (jack_client, "forward_output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+	forward_outport = jack_port_register (jack_client, "forward_output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 
 	jack_set_process_callback(jack_client, process, 0);
 	jack_set_session_callback(jack_client, session_callback_handler, NULL);
 	jack_set_port_registration_callback( jack_client, registration_handler, NULL);
+//	jack_set_graph_order_callback(jack_client, graph_order_callback_handler, outport);
 //	jack_set_port_connect_callback(jack_client, connect_callback_handler, ) 	
 	if ( jack_activate (jack_client) != 0 ) {
 		fprintf (stderr, "Could not activate client.\n");

@@ -3,13 +3,13 @@
 #set -x
 
 export VST_PATH="$HOME/VST:/usr/share/vst"
-#export XTERM='gnome-terminal -e'
-#export XTERM='xterm -e'
+#export XTERM='gnome-terminal -x'
+export XTERM='xterm -geometry 132x43 -e'
 #export XTERM='screen -T xterm-color -Dm'
-export XTERM='start_in_tmux'
+#export XTERM='start_in_tmux'
 #export PATH="/home/xj/Muzyka/fsthost/trunk:/home/xj/Muzyka/fhctrl:$PATH"
 #export PATH="/home/studio/SVN/fhctrl:/media/bigpig/secure/XJ/lvst/fsthost/trunk:$PATH"
-export FSTHOST_NOGUI=1
+#export FSTHOST_NOGUI=1
 export WINE_RT=${WINE_RT:-10}
 export WINE_SRV_RT=${WINE_SRV_RT:-15}
 
