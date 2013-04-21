@@ -11,11 +11,12 @@ extern void nLOG(char *fmt, ...);
 bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlug **fst) {
 	short i, j, sn = 0;
 	int ret;
-	char name[10];
+	char name[24];
 	struct Song* s;
 	struct FSTState* fs;
 	config_t cfg;
 	config_setting_t* group;
+	config_setting_t* song_name;
 	config_setting_t* list;
 
 	nLOG("Save to %s", config_file);
@@ -27,7 +28,7 @@ bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlu
 	for (i = j = 0; i < 128; i++) {
 		if (fst[i] == NULL) continue;
 
-		sprintf(name, "plugin%d", j++);
+		snprintf(name, sizeof name, "plugin%d", j++);
 		list = config_setting_add(group, name, CONFIG_TYPE_LIST);
 		config_setting_set_int_elem(list, -1, fst[i]->id);
 		config_setting_set_string_elem(list, -1, fst[i]->name);
@@ -35,14 +36,17 @@ bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlu
 
 	// Save songs
 	for(s = *song_first; s; s = s->next) {
-		sprintf(name, "song%d", sn++);
+		snprintf(name, sizeof name, "song%d", sn++);
 		group = config_setting_add(cfg.root, name, CONFIG_TYPE_GROUP);
+
+		song_name = config_setting_add(group, "name", CONFIG_TYPE_STRING);
+		config_setting_set_string( song_name, s->name );
 		for (i = j = 0; i < 128; i++) {
 			if (fst[i] == NULL) continue;
 
 			fs = s->fst_state[i];
 
-			sprintf(name, "plugin%d", j++);
+			snprintf(name, sizeof name, "plugin%d", j++);
 			list = config_setting_add(group, name, CONFIG_TYPE_LIST);
 			config_setting_set_int_elem(list, -1, fs->state);
 			config_setting_set_int_elem(list, -1, fs->program);
@@ -55,7 +59,7 @@ bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlu
 	ret = config_write_file(&cfg, config_file);
 	config_destroy(&cfg);
 
-	if(ret == CONFIG_TRUE) {
+	if (ret == CONFIG_TRUE) {
 		nLOG("Save OK");
 		return true;
 	} else {
@@ -104,14 +108,20 @@ bool load_state(const char* config_file, struct Song **song_first, struct FSTPlu
 		song = *song_first;
 
 again:
-		sprintf(name, "song%d", s);
-		if (config_lookup(&cfg, name) == NULL)
-			continue;
+		snprintf(name, sizeof name, "song%d", s);
+		if (config_lookup(&cfg, name) == NULL) continue;
 
 		// Create new song if needed
-		if (! song) song = song_new();
+		if (! song) {
+			song = song_new();
+			snprintf(name, sizeof name, "song%d.name", s);
+			const char* value;
+			if ( config_lookup_string ( &cfg, name, &value ) ) {
+				strncpy( song->name, value, 23 );
+			}
+		}
 
-		sprintf(name, "song%d.%s", s++, plugName);
+		snprintf(name, sizeof name, "song%d.%s", s++, plugName);
 		list = config_lookup(&cfg, name);
 		if (list != NULL) {
 			fs = song->fst_state[id];
@@ -120,11 +130,9 @@ again:
 			fs->channel = config_setting_get_int_elem(list, 2);
 			fs->volume = config_setting_get_int_elem(list, 3);
 			sparam = config_setting_get_string_elem(list, 4);
-			if (sparam)
-				strcpy(fs->program_name, sparam);
+			if (sparam) strcpy(fs->program_name, sparam);
 		}
 		song = song->next;
-
 		goto again;
 	}
 

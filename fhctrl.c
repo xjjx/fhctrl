@@ -41,6 +41,7 @@ static bool need_ses_reply = false;
 static bool try_connect_to_physical = true; /* try on start */
 static uint8_t offered_last = 0;
 static uint8_t offered_last_choke = 0;
+static uint8_t graph_order_changed = 1; /* Try detect on start */
 
 /* Public variables */
 struct FSTPlug* fst[128] = {NULL};
@@ -167,11 +168,9 @@ void send_ident_request() {
 	SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;
 	if ( ! queue_midi_out( (jack_midi_data_t*) &sysex_ident_request, sizeof(SysExIdentRqst) ) )
 		nLOG("SendIdentRequest - buffer full");
-
 }
 
 // Send SysEx Ident request if found some N/A plugs
-/* Currently not used - problem with SPAM - need some choke
 static void detect_na() {
 	uint8_t i;
 	for(i=0; i < 128; i++) {
@@ -181,7 +180,6 @@ static void detect_na() {
 		}
 	}
 }
-*/
 
 void send_dump_request(short id) {
 	SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
@@ -233,7 +231,7 @@ void song_send(short SongNumber) {
 	if (!song) return;
 	
 	enum State curState;
-	collect_rt_logs("Send Song \"%s\" SysEx", song->name);
+	collect_rt_logs("SendSong \"%s\"", song->name);
 	// Dump states via SysEx - for all FST
 	for (i=0; i < 128; i++) {
 		if (! (fp = fst[i]) ) continue;
@@ -241,12 +239,12 @@ void song_send(short SongNumber) {
 		curState = fp->state->state;
 		*fp->state = *song->fst_state[i];
 		// If plug is NA then keep it state and skip sending to plug
-		if(curState == FST_NA) {
+		if (curState == FST_NA) {
 			fp->state->state = FST_NA;
 			fp->change = true; // Update display
 			continue;
 		// If plug is NA in Song then preserve it's current state
-		} else if(fp->state->state == FST_NA) {
+		} else if (fp->state->state == FST_NA) {
 			fp->state->state = curState;
 		}
 		fp->change = true; // Update display
@@ -328,16 +326,14 @@ void session_callback_handler(jack_session_event_t *event, void* arg) {
 	need_ses_reply = true;
 }
 
-/*
 int graph_order_callback_handler( void *arg ) {
 	jack_port_t* outport = arg;
 
-	// If our outport is not connected to anyware - it's no sense to try send anything
-	if ( jack_port_connected(outport) ) graph_order_changed = true;
+	// If our outport isn't connected to anyware - it's no sense to try send anything
+	if ( jack_port_connected(outport) ) graph_order_changed = 10;
 
 	return 0;
 }
-*/
 
 void registration_handler(jack_port_id_t port_id, int reg, void *arg) {
 	if (reg != 0) try_connect_to_physical = true;
@@ -527,10 +523,13 @@ void idle_cb() {
 	/* discollect RT logs */
 	get_rt_logs();
 
-	/* Clear last offered (with some choke) */
-	if (offered_last > 0 && --offered_last_choke == 0) {
-		offered_last = 0;
-	}
+	/* Clear last offered and detect N/A (with some choke) */
+	if (offered_last_choke == 0) {
+		if (graph_order_changed > 0) {
+			if (--graph_order_changed == 0) detect_na();
+		}
+		if (offered_last > 0) offered_last = 0;
+	} else offered_last_choke--;
 }
 
 int main (int argc, char* argv[]) {
@@ -574,7 +573,7 @@ int main (int argc, char* argv[]) {
 	jack_set_process_callback(jack_client, process, 0);
 	jack_set_session_callback(jack_client, session_callback_handler, NULL);
 	jack_set_port_registration_callback( jack_client, registration_handler, NULL);
-//	jack_set_graph_order_callback(jack_client, graph_order_callback_handler, outport);
+	jack_set_graph_order_callback(jack_client, graph_order_callback_handler, outport);
 //	jack_set_port_connect_callback(jack_client, connect_callback_handler, ) 	
 	if ( jack_activate (jack_client) != 0 ) {
 		fprintf (stderr, "Could not activate client.\n");

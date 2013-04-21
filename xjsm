@@ -9,7 +9,7 @@ export XTERM='xterm -geometry 132x43 -e'
 #export XTERM='start_in_tmux'
 export PATH=".:/home/xj/Muzyka/fsthost/trunk:$PATH"
 #export PATH="/home/studio/SVN/fhctrl:/media/bigpig/secure/XJ/lvst/fsthost/trunk:$PATH"
-export FSTHOST_GUI=0
+export FSTHOST_GUI=1
 export WINE_RT=${WINE_RT:-10}
 export WINE_SRV_RT=${WINE_SRV_RT:-15}
 
@@ -102,7 +102,7 @@ ses_save() {
 	fi
 }
 
-[ -z "$MODE" || -z "$SES_PATH" ] && usage
+[ -z "$MODE" -o -z "$SES_PATH" ] && usage
 
 if [ ! -d "$LOGDIR" ] && ! mkdir "$LOGDIR"; then
 	echo "Log Directory doesn't exists, and can't create it $LOGDIR"
