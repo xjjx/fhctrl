@@ -137,10 +137,10 @@ void song_update(short SongNumber) {
 		return;
 	}
 
-	short i;
+	uint8_t i;
 	for(i=0; i < 128; i++) {
 		// Do not update state for inactive FSTPlugs
-		if (fst[i] && fst[i]->state->state == FST_NA)
+		if (fst[i] && fst[i]->state->state != FST_NA)
 			*song->fst_state[i] = *fst[i]->state;
 	}
 }
