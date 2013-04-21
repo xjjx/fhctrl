@@ -30,15 +30,15 @@
 #define CONNECT_APP "fhctrl_connect"
 #define SKIP_MIDI 1
 
-typedef struct UNMAP {
+typedef struct {
 	const char *name;
 	const char *uuid;
 } uuid_map_t;
 
-struct connection {
+typedef struct {
 	char *src;
 	char *dst;
-};
+} connection_t;
 
 jack_client_t *client;
 
@@ -82,21 +82,34 @@ void name2uuid ( JSList** uuid_map, char* buf, const char* name, size_t buf_size
 	snprintf(buf, buf_size, "%s", name);
 }
 
+connection_t* new_connection(const char *src, const char *dst) {
+	connection_t* new = malloc( sizeof(connection_t) );
+	new->src = strdup( src );
+	new->dst = strdup( dst );
+	return new;
+}
+
+void free_connection(connection_t *c) {
+	free(c->src);
+	free(c->dst);
+	free(c);
+}
+
 void store_connection(JSList** list, const char* src, const char* dst) {
-	struct connection *c;
 	/* Check is unique */
+	connection_t *c;
 	JSList* l;
 	for( l=*list; l; l=jack_slist_next(l) ) {
 		c = l->data;
-		if ( strcmp(c->src, src) == 0 && strcmp(c->dst, dst) == 0 ) {
+		if ( !strcmp(c->src, src) && !strcmp(c->dst, dst) ) {
 //			printf("# Skip duplicate %s -> %s\n", src, dst);
 			return;
 		}
 	}
-	c = malloc( sizeof(struct connection) );
-	c->src = strdup( src );
-	c->dst = strdup( dst );
-	*list = jack_slist_append(*list, c);
+
+	/* Append new connection */
+	c = new_connection( src, dst );
+	*list = jack_slist_append( *list, c );
 }
 
 int main(int argc, char *argv[]) {
@@ -107,19 +120,22 @@ int main(int argc, char *argv[]) {
 	char *package = basename(argv[0]); /* Program Name */
 	if (argc != 3) usage(package);
 
+	char* mode = argv[1];
+	char* path = argv[2];
+
 	jack_session_event_type_t notify_type;
-	if ( ! strcmp( argv[1], "quit" ) ) {
+	if ( ! strcmp( mode, "quit" ) ) {
 		notify_type = JackSessionSaveAndQuit;
-	} else if ( ! strcmp( argv[1], "save" ) ) {
+	} else if ( ! strcmp( mode, "save" ) ) {
 		notify_type = JackSessionSave;
 	} else {
 		usage(package);
 	}
 
-	/* Parse save path (Jack don't like trailing slash */
-	size_t save_path_size = strlen(argv[2]) + 1;
+	/* Parse save path (Jack need trailing slash */
+	size_t save_path_size = strlen(path) + 1;
 	char save_path[save_path_size];
-	strcpy(save_path, argv[2]);
+	strcpy(save_path, path);
 	char *last = save_path + strlen(save_path) - 1;
 	if (*last != '/') { *(++last) = '/'; *(++last) = '\0'; }
 
@@ -140,18 +156,19 @@ int main(int argc, char *argv[]) {
 
 	unsigned short i, j, k;
 	unsigned short exit_code = 0;
-	printf("LOGDIR=${LOGDIR:-/tmp}\n\n");
-	jack_session_command_t *retval =
-		jack_session_notify( client, NULL, notify_type, save_path );
+	printf("LOGDIR=${LOGDIR:-/tmp}\n");
+	printf("GLOBAL_SESSION_DIR=${GLOBAL_SESSION_DIR:-%s}\n", save_path);
+	putchar('\n');
+	jack_session_command_t *retval = jack_session_notify( client, NULL, notify_type, save_path );
 	for(i=0; retval[i].uuid; i++ ) {
-		printf( "# UUID: %s | NAME : %s ", retval[i].uuid, retval[i].client_name );
+		printf( "# UUID: %s | NAME : %s | STATE: ", retval[i].uuid, retval[i].client_name );
 		if ( retval[i].flags & JackSessionSaveError) {
 			printf("FAIL !!\n");
 			exit_code = 1;
 			continue;
 		}
-		printf( "OK\n");
-		printf( "export SESSION_DIR=\"%s%s/\"\n", save_path, retval[i].client_name );
+		printf( "OK\n" );
+		printf( "export SESSION_DIR=\"${GLOBAL_SESSION_DIR}%s/\"\n", retval[i].client_name );
 		if ( retval[i].flags & JackSessionNeedTerminal ) {
 			/* ncurses aplications */
 			printf( "$XTERM %s &\n", retval[i].command );
@@ -183,8 +200,6 @@ int main(int argc, char *argv[]) {
 			const char **conn = jack_port_get_all_connections( client, jack_port );
 			if (! conn) continue;
 			for (k=0; conn[k]; k++) {
-
-
 				if ( port_flags & JackPortIsInput ) {
 					store_connection(&connections_list, conn[k], ports[j]);
 				} else { // assume JackPortIsOutput
@@ -201,12 +216,11 @@ int main(int argc, char *argv[]) {
 	char src[name_size];
 	char dst[name_size];
 	for( l=connections_list; l; l=jack_slist_next(l) ) {
-		struct connection *c = l->data;
+		connection_t *c = l->data;
 		name2uuid( &uuid_map, src, c->src, sizeof(src) );
 		name2uuid( &uuid_map, dst, c->dst, sizeof(dst) );
 		printf( "%s -w 60 -u \"%s\" \"%s\"\n", CONNECT_APP, src, dst );
-		free(c->src);
-		free(c->dst);
+		free_connection(c);
 	}
 	jack_session_commands_free(retval);
 	jack_slist_free(uuid_map);

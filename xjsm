@@ -7,9 +7,9 @@ export VST_PATH="$HOME/VST:/usr/share/vst"
 export XTERM='xterm -geometry 132x43 -e'
 #export XTERM='screen -T xterm-color -Dm'
 #export XTERM='start_in_tmux'
-#export PATH="/home/xj/Muzyka/fsthost/trunk:/home/xj/Muzyka/fhctrl:$PATH"
+export PATH=".:/home/xj/Muzyka/fsthost/trunk:$PATH"
 #export PATH="/home/studio/SVN/fhctrl:/media/bigpig/secure/XJ/lvst/fsthost/trunk:$PATH"
-#export FSTHOST_NOGUI=1
+export FSTHOST_GUI=0
 export WINE_RT=${WINE_RT:-10}
 export WINE_SRV_RT=${WINE_SRV_RT:-15}
 
@@ -35,21 +35,22 @@ start_jack() {
 			return 1
 		fi
 		(nohup sh -c ". $HOME/.jackdrc" >/tmp/jackd.$LOGNAME.log 2>&1 &)
-		sleep 3
+		sleep 5
 	fi
 	return 0
 }
 
 start_ses() {
-	SES_SCRIPT=${SES_PATH}/session.sh
+	SES_SCRIPT="${SES_PATH}/session.sh"
 
-	echo "Starting session: ${SES_PATH%/}"
-	if [ ! -r $SES_SCRIPT ]; then
+	echo "Starting session: ${SES_PATH}"
+	if [ ! -r "$SES_SCRIPT" ]; then
 		echo "No file $SES_SCRIPT"
 		return 1
 	fi
+	GLOBAL_SESSION_DIR=${SES_PATH}/
 	. $SES_SCRIPT
-	
+
 	jobs -l
 	wait
 }
@@ -101,7 +102,7 @@ ses_save() {
 	fi
 }
 
-[ -z "$MODE" -o -z "$SES_PATH" ] && usage
+[ -z "$MODE" || -z "$SES_PATH" ] && usage
 
 if [ ! -d "$LOGDIR" ] && ! mkdir "$LOGDIR"; then
 	echo "Log Directory doesn't exists, and can't create it $LOGDIR"
