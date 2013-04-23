@@ -293,15 +293,13 @@ void nfhc (struct CDKGUI *gui) {
 		j = wgetch(top_logo->win);
 		switch(j) {
 			case 'q': quit=true; break;
-		 	case 's':
-				// Set Song
+		 	case 's': // Set Song
 				setCDKScrollHighlight(song_list, A_REVERSE);
 				tm = activateCDKScroll(song_list, NULL);
 				song_send(tm);
 				setCDKScrollHighlight(song_list, A_NORMAL);
 				break;
-			case 'u':
-				// Update Song
+			case 'u': // Update Song
 				setCDKScrollHighlight(song_list, A_REVERSE);
 				tm = activateCDKScroll(song_list, NULL);
 				song_update(tm);
@@ -312,8 +310,7 @@ void nfhc (struct CDKGUI *gui) {
 				song = song_new();
 				addCDKScrollItem(song_list, song->name);
 				break;
-			// Update config file
-			case 'w': update_config(); break;
+			case 'w': update_config(); break; // Update config file
 			case 'e': edit_selector (cdkscreen, fst); break;
 		}
 	}
