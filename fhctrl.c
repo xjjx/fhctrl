@@ -588,6 +588,9 @@ int main (int argc, char* argv[]) {
 	gui.idle_cb = idle_cb;
 	nfhc(&gui);
 
+	jack_deactivate ( jack_client );
+	jack_client_close ( jack_client );
+
 	// Close LCD
 	if (lcd_screen.available) lcd_close();
 
