@@ -215,6 +215,7 @@ int main(int argc, char *argv[]) {
 	int name_size = jack_port_name_size();
 	char src[name_size];
 	char dst[name_size];
+	printf("# Connections: %d\n", jack_slist_length(connections_list));
 	for( l=connections_list; l; l=jack_slist_next(l) ) {
 		connection_t *c = l->data;
 		name2uuid( &uuid_map, src, c->src, sizeof(src) );
