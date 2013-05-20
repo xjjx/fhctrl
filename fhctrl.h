@@ -43,6 +43,7 @@ struct CDKGUI {
 	struct FSTPlug **fst;
 	bool midi_in;
 	bool ctrl_midi_in;
+	bool sysex_midi_in;
 	bool lcd_need_update;
 	void (*idle_cb)(void);
 };

@@ -404,10 +404,9 @@ int process (jack_nframes_t frames, void* arg) {
 				song_send(event.buffer[1]);
 			continue;
 		}
-		gui.midi_in = true;
 
-		// Ident Reply
 		if ( event.size < 5 || event.buffer[0] != SYSEX_BEGIN ) continue;
+		gui.sysex_midi_in = true;
 
 		switch (event.buffer[1]) {
 		case SYSEX_NON_REALTIME:
@@ -487,6 +486,7 @@ int process (jack_nframes_t frames, void* arg) {
 	count = jack_midi_get_event_count (inbuf);
 	for (i = 0; i < count; ++i) {
 		if (jack_midi_event_get (&event, inbuf, i) != 0) break;
+		gui.midi_in = true;
 		if (jack_midi_event_write(outbuf, event.time, event.buffer, event.size) ) {
 			collect_rt_logs("Forward - Write dropped (buffer size: %d)", jack_midi_max_event_size(outbuf));
 			break;

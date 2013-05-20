@@ -165,22 +165,33 @@ void nLOG(char *fmt, ...) {
 	va_end(args);
 }
 
+void handle_light (CDKLABEL *label, bool* gui_in, bool* state) {
+	if (*state != *gui_in) {
+          *state = *gui_in;
+          setCDKLabelBackgroundColor(label, (*state) ? "</B/24>" : "</B/64>");
+          drawCDKLabel(label, TRUE);
+       }
+       *gui_in = false;
+}
+
 void nfhc (struct CDKGUI *gui) {
-	short i, j;
-	int lm = 0, tm = 0;
-	bool midi_in_state = false;
-	bool ctrl_midi_in_state = false;
-	CDKSCREEN	*cdkscreen;
-	CDKLABEL	*top_logo;
-	CDKLABEL	*midi_light;
-	CDKLABEL	*ctrl_light;
-	CDKSLIDER	*cpu_usage;
-	WINDOW		*screen;
-	char		*mesg[9];
-	struct labelbox selector[16];
-	struct FSTPlug **fst = gui->fst;
-	struct FSTPlug *fp;
-	struct Song *song = *gui->song_first;
+    short i, j;
+    int lm = 0, tm = 0;
+    bool midi_in_state = false;
+    bool ctrl_midi_in_state = false;
+    bool sysex_midi_in_state = false;
+    CDKSCREEN       *cdkscreen;
+    CDKLABEL        *top_logo;
+    CDKLABEL        *midi_light;
+    CDKLABEL        *ctrl_light;
+    CDKLABEL        *sysex_light;
+    CDKSLIDER       *cpu_usage;
+    WINDOW          *screen;
+    char            *mesg[9];
+    struct labelbox selector[16];
+    struct FSTPlug **fst = gui->fst;
+    struct FSTPlug *fp;
+    struct Song *song = *gui->song_first;
 
 	/* Initialize the Cdk screen.  */
 	screen = initscr();
@@ -224,10 +235,15 @@ void nfhc (struct CDKGUI *gui) {
 	setCDKLabelBackgroundColor(midi_light, "</B/64>");
 	drawCDKLabel(midi_light, TRUE);
 
-	mesg[0] = "CTRL IN";
-	ctrl_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 10, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
-	setCDKLabelBackgroundColor(ctrl_light, "</B/64>");
-	drawCDKLabel(ctrl_light, TRUE);
+    mesg[0] = "SYSEX IN";
+    sysex_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 10, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
+    setCDKLabelBackgroundColor(sysex_light, "</B/64>");
+    drawCDKLabel(sysex_light, TRUE);
+
+    mesg[0] = "CTRL IN";
+    ctrl_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 21, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
+    setCDKLabelBackgroundColor(ctrl_light, "</B/64>");
+    drawCDKLabel(ctrl_light, TRUE);
 
 	/* SELECTOR init - same shit for all boxes */
 	{
@@ -256,9 +272,9 @@ void nfhc (struct CDKGUI *gui) {
 				if (!fp) continue;
 				if (selector[i].fstid == fp->id && !fp->change) break;
 
-				fp->change = false;
-				gui->lcd_need_update = true;
-				update_selector(&selector[i], fp);
+	     fp->change = false;
+	     gui->lcd_need_update = true;
+             update_selector(&selector[i], fp);
 
 				break;
 			}
@@ -269,19 +285,9 @@ void nfhc (struct CDKGUI *gui) {
 		setCDKSliderValue(cpu_usage, cpu_load());
 		drawCDKSlider(cpu_usage, FALSE);
 
-		if (midi_in_state != gui->midi_in) {
-			midi_in_state = gui->midi_in;
-			setCDKLabelBackgroundColor(midi_light, (midi_in_state) ? "</B/24>" : "</B/64>");
-			drawCDKLabel(midi_light, TRUE);
-		}
-		gui->midi_in = false;
-
-		if (ctrl_midi_in_state != gui->ctrl_midi_in) {
-			ctrl_midi_in_state = gui->ctrl_midi_in;
-			setCDKLabelBackgroundColor(ctrl_light, (ctrl_midi_in_state) ? "</B/24>" : "</B/64>");
-			drawCDKLabel(ctrl_light, TRUE);
-		}
-		gui->ctrl_midi_in = false;
+       handle_light ( midi_light, &gui->midi_in, &midi_in_state );
+       handle_light ( ctrl_light, &gui->ctrl_midi_in, &ctrl_midi_in_state );
+       handle_light ( sysex_light, &gui->sysex_midi_in, &sysex_midi_in_state );
 
 		// Redraw
 		drawCDKLabel(top_logo, TRUE);
