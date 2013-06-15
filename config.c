@@ -4,7 +4,7 @@
 
 #include "fhctrl.h"
 
-extern struct FSTPlug* fst_get(uint8_t uuid);
+extern struct FSTPlug* fst_get(uint8_t uuid, enum Type type);
 extern struct Song* song_new();
 extern void nLOG(char *fmt, ...);
 
@@ -31,6 +31,7 @@ bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlu
 		snprintf(name, sizeof name, "plugin%d", j++);
 		list = config_setting_add(group, name, CONFIG_TYPE_LIST);
 		config_setting_set_int_elem(list, -1, fst[i]->id);
+		config_setting_set_int_elem(list, -1, fst[i]->type);
 		config_setting_set_string_elem(list, -1, fst[i]->name);
 	}
 
@@ -78,7 +79,7 @@ bool load_state(const char* config_file, struct Song **song_first, struct FSTPlu
 	char name[24];
 	const char* sparam;
 	const char* plugName;
-	unsigned short id, i, s;
+	unsigned short id, type, i, s;
 
 	config_init(&cfg);
 	if (!config_read_file(&cfg, config_file)) {
@@ -98,9 +99,10 @@ bool load_state(const char* config_file, struct Song **song_first, struct FSTPlu
 		plugName = config_setting_name(list);
 
 		id = config_setting_get_int_elem(list, 0);
-		f = fst_get(id);
+		type = config_setting_get_int_elem(list, 1);
+		f = fst_get(id, type);
 
-		sparam = config_setting_get_string_elem(list, 1);
+		sparam = config_setting_get_string_elem(list, 2);
 		strcpy(f->name, sparam);
 
 		// Songs iteration

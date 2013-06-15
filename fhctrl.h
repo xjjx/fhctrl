@@ -6,6 +6,11 @@
 
 #include <stdint.h>
 
+enum Type {
+	FST_TYPE_PLUGIN,
+	FST_TYPE_DEVICE
+};
+
 enum State {
 	FST_STATE_BYPASS = 0,
 	FST_STATE_ACTIVE = 1,
@@ -23,6 +28,7 @@ struct FSTState {
 struct FSTPlug {
         uint8_t id; /* 0 - 127 */
         char name[24];
+	enum Type type;
         struct FSTState* state;
 	bool change;
 };

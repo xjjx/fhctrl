@@ -36,7 +36,19 @@ extern int cpu_load();
 extern struct FSTState* state_new();
 extern void fst_send(struct FSTPlug* fp);
 extern void send_dump_request(short id);
-int state_color[3] = { 58, 59, 0 };
+
+int get_status_color ( struct FSTPlug* fp ) {
+	switch ( fp->type ) {
+		case FST_TYPE_DEVICE: return 60;
+		case FST_TYPE_PLUGIN:
+			switch ( fp->state->state ) {
+				case FST_STATE_BYPASS: return 58;
+				case FST_STATE_ACTIVE: return 59;
+				case FST_NA: return 0;
+			}
+	}
+	return 0;
+}
 
 static int get_value_dialog (CDKSCREEN *cdkscreen, char *title, char *label, char **values, int default_value, int count) {
 	CDKITEMLIST *valuelist;
@@ -93,15 +105,23 @@ static int edit_selector(CDKSCREEN *cdkscreen, struct FSTPlug **fst) {
 	if (!plug) return 0;
 	fp = fst[ valfstmap[--plug] ];
 
-	/* Select State */
-	snprintf(values[0], 40, "<C>Bypass");
-	snprintf(values[1], 40, "<C>Active");
-	fs->state =	 get_value_dialog (cdkscreen, "Select state", "State", values, fp->state->state, 2);
-	if (!fs->state) return 0;
-	--fs->state;
+	if ( fp->type == FST_TYPE_PLUGIN ) {
+		/* Select State */
+		snprintf(values[0], 40, "<C>Bypass");
+		snprintf(values[1], 40, "<C>Active");
+		fs->state =	 get_value_dialog (cdkscreen, "Select state", "State", values, fp->state->state, 2);
+		if (!fs->state) return 0;
+		--fs->state;
+
+		/* Select Volume */
+		for (i=0, count=0; i < 128; i++) snprintf(values[count++], 40, "<C>%d", i);
+		fs->volume = get_value_dialog (cdkscreen, "Select volume", "Volume", values, fp->state->volume, count);
+		if (!fs->volume) return 0;
+		--fs->volume;
+	}
 
 	/* Select Channel */
-	for (i=0, count=0; i < 15; i++) snprintf(values[count++], 40, "<C>Channel %d", i);
+	for (i=0, count=0; i < 16; i++) snprintf(values[count++], 40, "<C>Channel %d", i);
 	fs->channel = get_value_dialog (cdkscreen, "Select channel", "Channel", values, fp->state->channel, count);
 	if (!fs->channel) return 0;
 	--fs->channel;
@@ -111,12 +131,6 @@ static int edit_selector(CDKSCREEN *cdkscreen, struct FSTPlug **fst) {
 	fs->program = get_value_dialog (cdkscreen, "Select program", "Preset", values, fp->state->program, count);
 	if (!fs->program) return 0;
 	--fs->program;
-
-	/* Select Volume */
-	for (i=0, count=0; i < 128; i++) snprintf(values[count++], 40, "<C>%d", i);
-	fs->volume = get_value_dialog (cdkscreen, "Select volume", "Volume", values, fp->state->volume, count);
-	if (!fs->volume) return 0;
-	--fs->volume;
 
 	*fp->state = *fs;
 
@@ -138,7 +152,7 @@ void update_selector(struct labelbox *selector, struct FSTPlug *fp) {
 	}
 
 	snprintf(text[0], LABEL_LENGHT,"</U/%d>%03d %-23s | %s | %02d<!05>",
-		state_color[fp->state->state], 
+		get_status_color(fp), 
 		fp->id,
 		fp->name,
 		chtxt,
@@ -272,9 +286,9 @@ void nfhc (struct CDKGUI *gui) {
 				if (!fp) continue;
 				if (selector[i].fstid == fp->id && !fp->change) break;
 
-	     fp->change = false;
-	     gui->lcd_need_update = true;
-             update_selector(&selector[i], fp);
+				fp->change = false;
+				gui->lcd_need_update = true;
+				update_selector(&selector[i], fp);
 
 				break;
 			}
@@ -285,9 +299,9 @@ void nfhc (struct CDKGUI *gui) {
 		setCDKSliderValue(cpu_usage, cpu_load());
 		drawCDKSlider(cpu_usage, FALSE);
 
-       handle_light ( midi_light, &gui->midi_in, &midi_in_state );
-       handle_light ( ctrl_light, &gui->ctrl_midi_in, &ctrl_midi_in_state );
-       handle_light ( sysex_light, &gui->sysex_midi_in, &sysex_midi_in_state );
+		handle_light ( midi_light, &gui->midi_in, &midi_in_state );
+		handle_light ( ctrl_light, &gui->ctrl_midi_in, &ctrl_midi_in_state );
+		handle_light ( sysex_light, &gui->sysex_midi_in, &sysex_midi_in_state );
 
 		// Redraw
 		drawCDKLabel(top_logo, TRUE);

@@ -19,7 +19,7 @@ fhctrl_connect: connect.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack
 
 colors: colors.c
-	$(CC) $(CFLAGS) -o $@ $^ -lcdk -lcurses
+	$(CC) $(CFLAGS) -o $@ $^ -lcdk -lcurses -I/usr/include/cdk
 
 test: test.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack
