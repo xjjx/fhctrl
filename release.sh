@@ -1,7 +1,7 @@
 #!/bin/sh
 
 APP='fhctrl'
-VER='0.5'
+VER='0.6'
 DST='/media/bigpig/www/htdocs/kwintesencja'
 PKG="${DST}/${APP}-${VER}.tar.xz"
 
