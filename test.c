@@ -7,19 +7,44 @@
 #define VERSION "XJ"
 
 #include <jack/jack.h>
+#include <jack/midiport.h>
 
 char * my_name;
+jack_port_t* outport;
+jack_nframes_t jack_buffer_size;
+jack_nframes_t jack_sample_rate;
+uint8_t cc = 0;
+uint8_t value = 0;
+uint8_t start = 0;
+uint8_t end = 0;
 
-int
-main (int argc, char *argv[])
-{
+int process (jack_nframes_t frames, void* arg) {
+	void *outbuf = jack_port_get_buffer(outport, frames);
+	jack_midi_clear_buffer(outbuf);
+
+	if ( ! start ) return 0;
+
+	jack_midi_data_t data[3] = { 0xB1, cc, value };
+	size_t size = sizeof(data);
+
+	if ( jack_midi_event_write(outbuf, jack_buffer_size - 1, (const jack_midi_data_t*) &data, size) )
+		printf("Write dropped\n");
+
+	value += 60;
+	if ( value >= 127 ) {
+		value = 0;
+		if (++cc >= 127) end = 1;
+	}
+	start = 0;
+
+	return 0;
+}
+
+int main (int argc, char *argv[]) {
 	jack_client_t *client;
 	jack_status_t status;
-	jack_port_t* inport;
-	jack_port_t* outport;
 	jack_options_t options = JackNoStartServer;
-	const char** ports;
-	int i;
+	//const char** ports;
 
 	my_name = strrchr(argv[0], '/');
 	if (my_name == 0) {
@@ -38,28 +63,35 @@ main (int argc, char *argv[])
 		}
 		return 1;
 	}
+
+        jack_buffer_size = jack_get_buffer_size(client);
+        jack_sample_rate = jack_get_sample_rate(client);
 	
-	inport = jack_port_register (client, "input", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-	outport = jack_port_register (client, "output", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-/*
-        if ( jack_activate (client) != 0 ) {
+	outport = jack_port_register (client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+	jack_set_process_callback(client, process, 0);
+
+
+	printf("Activate ... ");
+	if ( jack_activate (client) != 0 ) {
                 fprintf (stderr, "Could not activate client.\n");
                 exit (EXIT_FAILURE);
         }
-*/
-	i = jack_connect(client, jack_port_name(outport), jack_port_name(inport));
-	printf("JackConnect status: %d\n", i);
+	printf("OK\n");
+	
+	printf("Wait 10s for start\n");
+	sleep(15);
 
-        ports = jack_get_ports (client, NULL, NULL, 0);
-        for (i = 0; ports && ports[i]; ++i) {
-		printf("%s\n", ports[i]);
+	printf("Started\n");
+	while ( !end ) {
+		start = 1;
+		printf("CC: %d | VALUE: %d\n", cc, value);
+		sleep(1);
 	}
-//	sleep(10);
 
-/*
         printf("Jack Deactivate\n");
         jack_deactivate(client);
-*/
+
+	jack_port_unregister(client, outport);
 
 	jack_client_close (client);
 	exit (0);
