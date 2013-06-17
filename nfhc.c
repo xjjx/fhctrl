@@ -1,11 +1,11 @@
-//		nfhc.c
-//		
-//		Shamefully done by blj <blindluke@gmail.com>
-//		
-//		This program is distributed in the hope that it will be useful,
-//		but WITHOUT ANY WARRANTY; without even the implied warranty of
-//		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-//		
+// nfhc.c
+//
+// Shamefully done by blj <blindluke@gmail.com>
+//             and by  xj <xj@wp.pl>
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 #include <stdio.h>
 #include <unistd.h>
@@ -15,9 +15,9 @@
 #define LEFT_MARGIN	0	/* Where the plugin boxes start */
 #define RIGHT_MARGIN	80	/* Where the infoboxes start */
 #define TOP_MARGIN	6	/* How much space is reserved for the logo */
-#define LOGWIN_WIDTH	42
-#define CHUJ		38
-#define LABEL_LENGHT CHUJ+11
+#define LOGWIN_WIDTH	42	/* Logger window width */
+#define CHUJ		38	/* TODO: what it is ;-) */
+#define LABEL_LENGHT CHUJ+11	/* TODO: what it is ;-) */
 
 struct labelbox {
 	CDKLABEL *label;
@@ -34,19 +34,22 @@ extern void song_update(short SongNumber);
 extern void update_config();
 extern int cpu_load();
 extern struct FSTState* state_new();
+extern struct FSTPlug* fst_next(struct FSTPlug* prev);
 extern void fst_send(struct FSTPlug* fp);
 extern void send_dump_request(short id);
 
 int get_status_color ( struct FSTPlug* fp ) {
-	switch ( fp->type ) {
-		case FST_TYPE_DEVICE: return 60;
-		case FST_TYPE_PLUGIN:
-			switch ( fp->state->state ) {
-				case FST_STATE_BYPASS: return 58;
-				case FST_STATE_ACTIVE: return 59;
-				case FST_NA: return 0;
+	switch ( fp->state->state ) {
+		case FST_STATE_BYPASS: return 58;
+		case FST_STATE_ACTIVE:
+			switch ( fp->type ) {
+				case FST_TYPE_DEVICE: return 60;
+				case FST_TYPE_PLUGIN: return 59;
 			}
+			break;
+		case FST_NA: return 0;
 	}
+
 	return 0;
 }
 
@@ -97,29 +100,21 @@ static int edit_selector(CDKSCREEN *cdkscreen, struct FSTPlug **fst) {
 
 	/* Select Plugin */
 	for (i=0, count=0; i < 128; i++) {
-	   if (! (fp = fst[i]) ) continue;
-	   valfstmap[count] = i;
-	   snprintf(values[count++], 40, "<C>%s", fp->name);
+		if (! (fp = fst[i]) ) continue;
+		valfstmap[count] = i;
+		snprintf(values[count++], 40, "<C>%s", fp->name);
 	}
 	plug = get_value_dialog (cdkscreen, "Select device", "Device", values, 0, count);
 	if (!plug) return 0;
 	fp = fst[ valfstmap[--plug] ];
 
-	if ( fp->type == FST_TYPE_PLUGIN ) {
-		/* Select State */
-		snprintf(values[0], 40, "<C>Bypass");
-		snprintf(values[1], 40, "<C>Active");
-		fs->state =	 get_value_dialog (cdkscreen, "Select state", "State", values, fp->state->state, 2);
-		if (!fs->state) return 0;
-		--fs->state;
-
-		/* Select Volume */
-		for (i=0, count=0; i < 128; i++) snprintf(values[count++], 40, "<C>%d", i);
-		fs->volume = get_value_dialog (cdkscreen, "Select volume", "Volume", values, fp->state->volume, count);
-		if (!fs->volume) return 0;
-		--fs->volume;
-	}
-
+	/* Select State */
+	snprintf(values[0], 40, "<C>Bypass");
+	snprintf(values[1], 40, "<C>Active");
+	fs->state = get_value_dialog (cdkscreen, "Select state", "State", values, fp->state->state, 2);
+	if (!fs->state) return 0;
+	--fs->state;
+	
 	/* Select Channel */
 	for (i=0, count=0; i < 16; i++) snprintf(values[count++], 40, "<C>Channel %d", i);
 	fs->channel = get_value_dialog (cdkscreen, "Select channel", "Channel", values, fp->state->channel, count);
@@ -131,6 +126,14 @@ static int edit_selector(CDKSCREEN *cdkscreen, struct FSTPlug **fst) {
 	fs->program = get_value_dialog (cdkscreen, "Select program", "Preset", values, fp->state->program, count);
 	if (!fs->program) return 0;
 	--fs->program;
+
+	/* Select Volume */
+	if ( fp->type == FST_TYPE_PLUGIN ) {
+		for (i=0, count=0; i < 128; i++) snprintf(values[count++], 40, "<C>%d", i);
+		fs->volume = get_value_dialog (cdkscreen, "Select volume", "Volume", values, fp->state->volume, count);
+		if (!fs->volume) return 0;
+		--fs->volume;
+	}
 
 	*fp->state = *fs;
 
@@ -181,31 +184,30 @@ void nLOG(char *fmt, ...) {
 
 void handle_light (CDKLABEL *label, bool* gui_in, bool* state) {
 	if (*state != *gui_in) {
-          *state = *gui_in;
-          setCDKLabelBackgroundColor(label, (*state) ? "</B/24>" : "</B/64>");
-          drawCDKLabel(label, TRUE);
-       }
-       *gui_in = false;
+		*state = *gui_in;
+		setCDKLabelBackgroundColor(label, (*state) ? "</B/24>" : "</B/64>");
+		drawCDKLabel(label, TRUE);
+	}
+	*gui_in = false;
 }
 
 void nfhc (struct CDKGUI *gui) {
-    short i, j;
-    int lm = 0, tm = 0;
-    bool midi_in_state = false;
-    bool ctrl_midi_in_state = false;
-    bool sysex_midi_in_state = false;
-    CDKSCREEN       *cdkscreen;
-    CDKLABEL        *top_logo;
-    CDKLABEL        *midi_light;
-    CDKLABEL        *ctrl_light;
-    CDKLABEL        *sysex_light;
-    CDKSLIDER       *cpu_usage;
-    WINDOW          *screen;
-    char            *mesg[9];
-    struct labelbox selector[16];
-    struct FSTPlug **fst = gui->fst;
-    struct FSTPlug *fp;
-    struct Song *song = *gui->song_first;
+	short i, j;
+	int lm = 0, tm = 0;
+	bool midi_in_state = false;
+	bool ctrl_midi_in_state = false;
+	bool sysex_midi_in_state = false;
+	CDKSCREEN *cdkscreen;
+	CDKLABEL *top_logo;
+	CDKLABEL *midi_light;
+	CDKLABEL *ctrl_light;
+	CDKLABEL *sysex_light;
+	CDKSLIDER *cpu_usage;
+	WINDOW *screen;
+	char *mesg[9];
+	struct labelbox selector[16];
+	struct FSTPlug **fst = gui->fst;
+	struct Song *song = *gui->song_first;
 
 	/* Initialize the Cdk screen.  */
 	screen = initscr();
@@ -230,18 +232,23 @@ void nfhc (struct CDKGUI *gui) {
 	drawCDKSwindow(logwin, TRUE);
 
 	/* Create Song List */
-	song_list = newCDKScroll ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+17, RIGHT, 8, 
-		LOGWIN_WIDTH-1, "</U/63>Select song preset:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE);
+	song_list = newCDKScroll (
+		cdkscreen, RIGHT_MARGIN, TOP_MARGIN+17, RIGHT, 8, LOGWIN_WIDTH-1,
+		"</U/63>Select song preset:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
+	);
 
-	while(song) {
+	while ( song ) {
 		addCDKScrollItem(song_list, song->name);
 		song = song->next;
 	}
+
 //	bindCDKObject(vSCROLL, song_list, 'q', kurwa_jebana, NULL);
 	drawCDKScroll(song_list, TRUE);
 
-	cpu_usage = newCDKSlider ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+25, "DSP LOAD [%]", "", A_REVERSE|' ', 
-				LOGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE);
+	cpu_usage = newCDKSlider (
+		cdkscreen, RIGHT_MARGIN, TOP_MARGIN+25, "DSP LOAD [%]", "",
+		A_REVERSE|' ', LOGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE
+	);
 	drawCDKSlider(cpu_usage, FALSE);
 
 	mesg[0] = "MIDI IN";
@@ -249,22 +256,22 @@ void nfhc (struct CDKGUI *gui) {
 	setCDKLabelBackgroundColor(midi_light, "</B/64>");
 	drawCDKLabel(midi_light, TRUE);
 
-    mesg[0] = "SYSEX IN";
-    sysex_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 10, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
-    setCDKLabelBackgroundColor(sysex_light, "</B/64>");
-    drawCDKLabel(sysex_light, TRUE);
+	mesg[0] = "SYSEX IN";
+ 	sysex_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 10, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
+	setCDKLabelBackgroundColor(sysex_light, "</B/64>");
+	drawCDKLabel(sysex_light, TRUE);
 
-    mesg[0] = "CTRL IN";
-    ctrl_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 21, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
-    setCDKLabelBackgroundColor(ctrl_light, "</B/64>");
-    drawCDKLabel(ctrl_light, TRUE);
+	mesg[0] = "CTRL IN";
+	ctrl_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 21, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
+	setCDKLabelBackgroundColor(ctrl_light, "</B/64>");
+	drawCDKLabel(ctrl_light, TRUE);
 
 	/* SELECTOR init - same shit for all boxes */
 	{
 		char text[2][LABEL_LENGHT];
 		char* ptext[2] = { text[0], text[1] };
 
-		for(i=0; i < 2; i++) cleanChar(text[i], CHUJ, '-');
+		for (i=0; i < 2; i++) cleanChar(text[i], CHUJ, '-');
 		for (i  = 0; i < 16; i++, tm += 4) {
 			if (i == 8) { lm = CHUJ+2; tm = 0; }
 
@@ -278,20 +285,16 @@ void nfhc (struct CDKGUI *gui) {
 	wtimeout(top_logo->win, 300);
 //	cbreak();
 	while(! quit) {
-	// For our boxes
-		for (i = j = 0; i < 16; i++) {
-			// Get next FST
-			while (j < 128) {
-				fp = fst[j++];
-				if (!fp) continue;
-				if (selector[i].fstid == fp->id && !fp->change) break;
-
-				fp->change = false;
-				gui->lcd_need_update = true;
-				update_selector(&selector[i], fp);
-
-				break;
-			}
+		struct FSTPlug *fp = NULL;
+		// For our boxes
+		for (i = 0; i < 16; i++) {
+			fp = fst_next ( fp );
+			if (!fp) break;
+			if (selector[i].fstid == fp->id && !fp->change) continue;
+			
+			fp->change = false;
+			gui->lcd_need_update = true;
+			update_selector(&selector[i], fp);
 		}
 
 		if (gui->idle_cb) gui->idle_cb();

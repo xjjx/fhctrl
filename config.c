@@ -4,7 +4,7 @@
 
 #include "fhctrl.h"
 
-extern struct FSTPlug* fst_get(uint8_t uuid, enum Type type);
+extern struct FSTPlug* fst_get(uint8_t uuid);
 extern struct Song* song_new();
 extern void nLOG(char *fmt, ...);
 
@@ -79,7 +79,7 @@ bool load_state(const char* config_file, struct Song **song_first, struct FSTPlu
 	char name[24];
 	const char* sparam;
 	const char* plugName;
-	unsigned short id, type, i, s;
+	unsigned short id, i, s;
 
 	config_init(&cfg);
 	if (!config_read_file(&cfg, config_file)) {
@@ -99,8 +99,8 @@ bool load_state(const char* config_file, struct Song **song_first, struct FSTPlu
 		plugName = config_setting_name(list);
 
 		id = config_setting_get_int_elem(list, 0);
-		type = config_setting_get_int_elem(list, 1);
-		f = fst_get(id, type);
+		f = fst_get(id);
+		f->type = config_setting_get_int_elem(list, 1);
 
 		sparam = config_setting_get_string_elem(list, 2);
 		strcpy(f->name, sparam);

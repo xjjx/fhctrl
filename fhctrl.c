@@ -57,24 +57,26 @@ void jack_log_silent(const char *msg) { return; }
 
 struct FSTState* state_new() {
 	struct FSTState* fs = calloc(1,sizeof(struct FSTState));
-	fs->state = FST_NA; // Initial state is Inactive
+	// Default state is Inactive
+	fs->state = FST_NA;
+	// Default program name is .. like below ;-)
+	strcpy(fs->program_name, "<<<- UNKNOWN PRESET- >>>");
+	// Rest is initialized to 0 ( by calloc )
 	return fs;
 }
 
-void fst_new(uint8_t uuid, enum Type type) {
+void fst_new(uint8_t uuid) {
 	struct Song* s;
 	struct FSTPlug* f = malloc(sizeof(struct FSTPlug));
 	snprintf(f->name, sizeof f->name, "Device%d", uuid);
 	f->id = uuid;
-	f->type = type;
+	f->type = FST_TYPE_PLUGIN; // default type
 	f->state = state_new();
-	strcpy(f->state->program_name, "<<<- UNKNOWN PRESET- >>>");
 	f->change = true;
 
 	// Add states to songs
-	for(s = song_first; s; s = s->next) {
+	for(s = song_first; s; s = s->next)
 		s->fst_state[uuid] = state_new();
-	}
 
 	// Fill our global array
 	fst[uuid] = f;
@@ -86,9 +88,20 @@ uint8_t fst_uniqe_id(uint8_t start) {
 	return 0; // 0 mean error
 }
 
-struct FSTPlug* fst_get(uint8_t uuid, enum Type type) {
-	if (fst[uuid] == NULL) fst_new(uuid, type);
+struct FSTPlug* fst_get(uint8_t uuid) {
+	if (fst[uuid] == NULL) fst_new(uuid);
 	return fst[uuid];	
+}
+
+struct FSTPlug* fst_next ( struct FSTPlug* prev ) {
+	struct FSTPlug* fp;
+	uint8_t i = (prev == NULL) ? 0 : prev->id + 1;
+	while ( i < 128 ) {
+		fp = fst[i];
+		if (fp) return fp;
+		i++;
+	}
+	return NULL;
 }
 
 struct Song* song_new() {
@@ -167,19 +180,25 @@ void send_ident_request() {
 	uint8_t i;
 
 	// Reset states to non-active
-	for(i=0; i < 128; i++) if (fst[i]) fst[i]->state->state = FST_NA;
+	// NOTE: non-sysex devices doesn't handle IdentRequest
+	for(i=0; i < 128; i++) {
+		if (fst[i] && fst[i]->type != FST_TYPE_DEVICE) {
+			fst[i]->state->state = FST_NA;
+		}
+	}
 
 	nLOG("Send ident request");
 	SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;
 	queue_midi_out( (jack_midi_data_t*) &sysex_ident_request, sizeof(SysExIdentRqst), "SendIdentRequest", -1 );
 }
 
-// Send SysEx Ident request if found some N/A plugs
+// Send SysEx Ident request if found some N/A units
+// NOTE: don't trigger for non-sysex units
 static void detect_na() {
 	uint8_t i;
 	for(i=0; i < 128; i++) {
 		struct FSTPlug* fp = fst[i];
-		if(fp && fp->type == FST_TYPE_PLUGIN && fp->state->state == FST_NA) {
+		if(fp && fp->type != FST_TYPE_DEVICE && fp->state->state == FST_NA) {
 			send_ident_request();
 			return;
 		}
@@ -242,30 +261,33 @@ void song_send(short SongNumber) {
 
 		curState = fp->state->state;
 		*fp->state = *song->fst_state[i];
+		
+		// If unit is NA in Song then preserve it's current state and skip sending
+		if (fp->state->state == FST_NA) {
+			fp->state->state = curState;
+			continue;
+		}
 
+		// Send state to unit
 		switch ( fp->type ) {
 		case FST_TYPE_DEVICE: ;
 			// For devices just send ProgramChange
 			jack_midi_data_t pc[2];
-			pc[0] = ( fp->state->channel & 0x0F ) | 0xC0 ;
-			pc[1] = ( fp->state->program & 0x0F );
-			fp->change = true; // Update display
+			pc[0] = fp->state->channel - 1;
+			pc[0] &= 0x0F | 0xC0;
+			pc[1] = fp->state->program & 0x0F;
 			queue_midi_out( pc, sizeof (pc), "SendSong", fp->id);
 			break;
 		case FST_TYPE_PLUGIN:
-			// If plug is NA then keep it state and skip sending to plug
+			// If unit is NA then keep it state and skip sending
 			if (curState == FST_NA) {
 				fp->state->state = FST_NA;
-				fp->change = true; // Update display
-				continue;
-			// If plug is NA in Song then preserve it's current state
-			} else if (fp->state->state == FST_NA) {
-				fp->state->state = curState;
+			} else {
+				fst_send(fp);
 			}
-			fp->change = true; // Update display
-			fst_send(fp);
 			break;
 		}
+		fp->change = true; // Update display
 	}
 }
 
@@ -439,7 +461,8 @@ int process (jack_nframes_t frames, void* arg) {
 					send_offer(r);
 				} else {
 					// Note: we refresh GUI when dump back to us
-					fp = fst_get(r->model[0], FST_TYPE_PLUGIN);
+					fp = fst_get(r->model[0]);
+					fp->type = FST_TYPE_PLUGIN; // We just know this ;-)
 					send_dump_request(fp->id);
 				}
 			} /* else { Regular device - not supported yet } */
@@ -457,7 +480,8 @@ int process (jack_nframes_t frames, void* arg) {
 				continue;
 			}
 
-			fp = fst_get(d->uuid, FST_TYPE_PLUGIN);
+			fp = fst_get(d->uuid);
+			fp->type = FST_TYPE_PLUGIN; // We just know this ;-)
 			fp->state->state = d->state;
 			fp->state->program = d->program;
 			fp->state->channel = d->channel;
