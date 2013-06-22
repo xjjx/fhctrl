@@ -369,7 +369,7 @@ void nfhc (struct CDKGUI *gui) {
 			case 'i': send_ident_request(); break;
 			case 'n': ;
 				struct Song *song = song_new();
-				addCDKScrollItem(song_list, song->name);
+				change_song_name ( cdkscreen , *gui->song_first, song );
 				break;
 			case 'g':
 				change_song_name ( cdkscreen , *gui->song_first, song_get ( getCDKScrollCurrent ( song_list ) ) );
