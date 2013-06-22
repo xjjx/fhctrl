@@ -15,7 +15,8 @@
 #define LEFT_MARGIN	0	/* Where the plugin boxes start */
 #define RIGHT_MARGIN	80	/* Where the infoboxes start */
 #define TOP_MARGIN	6	/* How much space is reserved for the logo */
-#define LOGWIN_WIDTH	42	/* Logger window width */
+#define SONGWIN_WIDTH	42	/* Song window width */
+#define SONGWIN_HEIGHT	24	/* Song window height */
 #define CHUJ		38	/* TODO: what it is ;-) */
 #define LABEL_LENGHT CHUJ+11	/* TODO: what it is ;-) */
 
@@ -24,7 +25,6 @@ struct labelbox {
 	uint8_t fstid;
 };
 
-CDKSWINDOW *logwin = NULL;
 CDKSCROLL *song_list;
 bool quit = false;
 extern void send_ident_request(); // From fhctrl.c
@@ -51,6 +51,37 @@ int get_status_color ( struct FSTPlug* fp ) {
 	}
 
 	return 0;
+}
+
+static void show_log (CDKSCREEN *cdkscreen) {
+	const char *filename = "/tmp/fhctrl.log";
+
+	CDKVIEWER *viewer = newCDKViewer (
+		cdkscreen,
+		22, /* xpos */
+		2, /* ypos */
+		30, /* height */
+		100, /* width */
+		NULL, /* CDK_CONST char **buttonList */
+		0, /* buttonCount */
+		A_REVERSE, /* buttonHighlight */
+		TRUE, /* box */
+		FALSE /*shadow */
+	);
+	/* Set up the viewer title, and the contents to the widget. */
+	char vTitle[256];
+	snprintf (vTitle, sizeof(vTitle), "<C></B/21>Filename:<!21></22>%20s<!22!B>", filename);
+
+	char vFile[256];
+	snprintf (vFile, sizeof ( vFile ), "<F=%s>", filename);
+
+	char* FF[1] = { vFile };
+	setCDKViewer (viewer, vTitle, FF, 1, A_REVERSE, TRUE, TRUE, TRUE);
+
+	drawCDKViewer ( viewer, TRUE );
+	activateCDKViewer ( viewer, NULL );
+
+	destroyCDKViewer ( viewer);
 }
 
 static int get_value_dialog (CDKSCREEN *cdkscreen, char *title, char *label, char **values, int default_value, int count) {
@@ -212,13 +243,10 @@ void nfhc (struct CDKGUI *gui) {
 	top_logo = newCDKLabel (cdkscreen, LEFT_MARGIN+10, TOP, mesg, 5, FALSE, FALSE);
 	drawCDKLabel(top_logo, TRUE);
 
-	logwin = newCDKSwindow (cdkscreen, RIGHT_MARGIN, TOP_MARGIN, 15, LOGWIN_WIDTH, "</U/63>LOG", 17, TRUE, FALSE);
-	//drawCDKSwindow(logwin, TRUE);
-
 	/* Create Song List */
 	song_list = newCDKScroll (
-		cdkscreen, RIGHT_MARGIN, TOP_MARGIN+17, RIGHT, 8, LOGWIN_WIDTH-1,
-		"</U/63>Select song preset:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
+		cdkscreen, RIGHT_MARGIN, TOP_MARGIN, RIGHT, SONGWIN_HEIGHT, SONGWIN_WIDTH,
+		"</U/63>Select song:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
 	);
 
 	while ( song ) {
@@ -231,7 +259,7 @@ void nfhc (struct CDKGUI *gui) {
 
 	cpu_usage = newCDKSlider (
 		cdkscreen, RIGHT_MARGIN, TOP_MARGIN+25, "DSP LOAD [%]", "",
-		A_REVERSE|' ', LOGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE
+		A_REVERSE|' ', SONGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE
 	);
 	drawCDKSlider(cpu_usage, FALSE);
 
@@ -292,7 +320,6 @@ void nfhc (struct CDKGUI *gui) {
 
 		// Redraw
 		drawCDKLabel(top_logo, TRUE);
-		//drawCDKSwindow(logwin, TRUE);
 		drawCDKScroll(song_list, TRUE);
 		for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
 //		refreshCDKScreen(cdkscreen);
@@ -319,13 +346,12 @@ void nfhc (struct CDKGUI *gui) {
 				break;
 			case 'w': update_config(); break; // Update config file
 			case 'e': edit_selector (cdkscreen, fst); break;
+			case 'l': show_log(cdkscreen); break;
 		}
 	}
 
 	/* Clean up */
 	destroyCDKLabel(top_logo);
-	destroyCDKSwindow(logwin);
-	logwin = NULL;
 	destroyCDKScroll(song_list);
 	destroyCDKSlider(cpu_usage);
 	for (i = 0; i < 16; i++) destroyCDKLabel(selector[i].label);

@@ -577,9 +577,11 @@ int main (int argc, char* argv[]) {
 	if (argv[1]) config_file = argv[1];
 	if (argv[2]) uuid = argv[2];
 
+	clear_log();
+
 	/* Try change terminal size */
 	printf("\033[8;43;132t\n");
-	sleep(1); // Time for resize terminal
+//	sleep(1); // Time for resize terminal
 
 	// Init log collector
 	log_collector = jack_ringbuffer_create(127 * 50 * sizeof(char));

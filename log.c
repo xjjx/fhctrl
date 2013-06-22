@@ -5,6 +5,10 @@
 
 const char* logfile = "/tmp/fhctrl.log";
 
+void clear_log() {
+	remove ( logfile );
+}
+
 void LOG(char *fmt, ...) {
 	FILE *f = fopen( logfile , "a" );
 	if (!f) {
