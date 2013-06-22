@@ -52,7 +52,7 @@ struct LCDScreen lcd_screen;
 static void collect_rt_logs(char *fmt, ...);
 
 /* Functions */
-void jack_log(const char *msg) { nLOG((char*) msg); }
+void jack_log(const char *msg) { LOG((char*) msg); }
 void jack_log_silent(const char *msg) { return; }
 
 struct FSTState* state_new() {
@@ -109,7 +109,7 @@ struct Song* song_new() {
 	struct Song** snptr;
 	struct Song* s = calloc(1, sizeof(struct Song));
 
-	//nLOG("Creating new song");
+	//LOG("Creating new song");
 	// Add state for already known plugins
 	for(i=0; i < 128; i++) {
 		if (fst[i] == NULL) continue;
@@ -151,7 +151,7 @@ struct Song* song_get(short SongNumber) {
 void song_update(short SongNumber) {
 	struct Song* song = song_get(SongNumber);
 	if(song == NULL) {
-		nLOG("SongUpdate: no such song");
+		LOG("SongUpdate: no such song");
 		return;
 	}
 
@@ -165,7 +165,7 @@ void song_update(short SongNumber) {
 
 bool queue_midi_out(jack_midi_data_t* data, size_t size, const char* What, int8_t id) {
 	if (jack_ringbuffer_write_space(buffer_midi_out) < size + sizeof(size)) {
-		nLOG("%s - No space in MIDI OUT buffer (ID:%d)", What, id);
+		LOG("%s - No space in MIDI OUT buffer (ID:%d)", What, id);
 		return false;
 	} else {
 		// Size of message
@@ -187,7 +187,7 @@ void send_ident_request() {
 		}
 	}
 
-	nLOG("Send ident request");
+	LOG("Send ident request");
 	SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;
 	queue_midi_out( (jack_midi_data_t*) &sysex_ident_request, sizeof(SysExIdentRqst), "SendIdentRequest", -1 );
 }
@@ -208,7 +208,7 @@ static void detect_na() {
 void send_dump_request(short id) {
 	SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
 	sysex_dump_request.uuid = id;
-	nLOG("Sent dump request for ID:%d", id);
+	LOG("Sent dump request for ID:%d", id);
 	queue_midi_out( (jack_midi_data_t*) &sysex_dump_request, sizeof(SysExDumpRequestV1), "SendDumpRequest", id);
 }
 
@@ -322,7 +322,7 @@ void update_lcd() {
 }
 
 static void session_reply() {
-	nLOG("session callback");
+	LOG("session callback");
 
 	char *restore_cmd = malloc(256);
 	char filename[FILENAME_MAX];
@@ -354,7 +354,7 @@ static void connect_to_physical() {
 	for (i=0; jports[i] != NULL; i++) {
 		if (jack_port_connected_to(forward_inport, jports[i])) continue;
 		jack_connect(jack_client, jports[i], pname);
-		nLOG("%s -> %s\n", pname, jports[i]);
+		LOG("%s -> %s\n", pname, jports[i]);
 	}
 	jack_free(jports);
 }
@@ -391,7 +391,7 @@ static void get_rt_logs() {
 		jack_ringbuffer_peek(log_collector, (char*) &info, len);
 		jack_ringbuffer_read_advance(log_collector, len);
 
-		nLOG(info);
+		LOG(info);
 	}
 }
 
@@ -401,18 +401,17 @@ static void collect_rt_logs(char *fmt, ...) {
 
 	va_start(args, fmt);
 	vsnprintf(info, sizeof(info), fmt, args);
+	va_end(args);
 	uint8_t len = strlen(info) + 1;
 
 	if (jack_ringbuffer_write_space(log_collector) < len + sizeof len) {
-		nLOG("No space in log collector");
+		LOG("No space in log collector");
 	} else {
 		// Size of message
 		jack_ringbuffer_write(log_collector, (char*) &len, sizeof len);
 		// Message itself
 		jack_ringbuffer_write(log_collector, (char*) &info, len);
 	}
-
-	va_end(args);
 }
 
 int process (jack_nframes_t frames, void* arg) {

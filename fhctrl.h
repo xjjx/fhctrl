@@ -54,6 +54,9 @@ struct CDKGUI {
 	void (*idle_cb)(void);
 };
 
+/* nfhc.c */
 void nfhc(struct CDKGUI *gui);
-void nLOG(char *fmt, ...);
+
+/* log.c */
+void LOG(char *fmt, ...);
 

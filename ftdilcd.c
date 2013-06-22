@@ -4,7 +4,7 @@
 
 #include "ftdilcd.h"
 
-extern void nLOG(char *fmt, ...);
+extern void LOG(char *fmt, ...);
 
 /*
  * bitbang I/O pin mappings 
@@ -74,7 +74,7 @@ static void lcd_write (enum LCD_MODE lcd_mode, char data) {
    f = ftdi_write_data(ftdic, buf, 4);
 
    if (f < 0) {
-      nLOG("unable to open ftdi device: %d (%s)", f, ftdi_get_error_string(ftdic));
+      LOG("unable to open ftdi device: %d (%s)", f, ftdi_get_error_string(ftdic));
       return;
    }
 }
@@ -132,14 +132,14 @@ bool lcd_init() {
     ftdi_set_interface(ftdic, INTERFACE_A);
     f = ftdi_usb_open(ftdic, FTDI_VENDOR, FTDI_PRODUCT);
     if (f < 0) {
-        nLOG("FTDI: Can't open device %d", f);
+        LOG("FTDI: Can't open device %d", f);
 	free(ftdic);
         return false;
     }
 
     f = ftdi_set_baudrate(ftdic, FTDI_BAUDRATE);
     if (f < 0) {
-        nLOG("FTDI: Can't set baudrate to %d", FTDI_BAUDRATE);
+        LOG("FTDI: Can't set baudrate to %d", FTDI_BAUDRATE);
 	free(ftdic);
         return false;
     }

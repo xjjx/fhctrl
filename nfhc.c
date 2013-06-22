@@ -166,22 +166,6 @@ void update_selector(struct labelbox *selector, struct FSTPlug *fp) {
 	drawCDKLabel(selector->label, TRUE);
 }
 
-void nLOG(char *fmt, ...) {
-	char info[LOGWIN_WIDTH-2];
-	va_list args;
-
-	va_start(args, fmt);
-
-	vsnprintf(info, sizeof(info), fmt, args);
-	if (logwin != NULL) {
-		addCDKSwindow(logwin, info, 0);
-	} else {
-		printf("%s\n", info);
-	}
-
-	va_end(args);
-}
-
 void handle_light (CDKLABEL *label, bool* gui_in, bool* state) {
 	if (*state != *gui_in) {
 		*state = *gui_in;
@@ -229,7 +213,7 @@ void nfhc (struct CDKGUI *gui) {
 	drawCDKLabel(top_logo, TRUE);
 
 	logwin = newCDKSwindow (cdkscreen, RIGHT_MARGIN, TOP_MARGIN, 15, LOGWIN_WIDTH, "</U/63>LOG", 17, TRUE, FALSE);
-	drawCDKSwindow(logwin, TRUE);
+	//drawCDKSwindow(logwin, TRUE);
 
 	/* Create Song List */
 	song_list = newCDKScroll (
@@ -308,7 +292,7 @@ void nfhc (struct CDKGUI *gui) {
 
 		// Redraw
 		drawCDKLabel(top_logo, TRUE);
-		drawCDKSwindow(logwin, TRUE);
+		//drawCDKSwindow(logwin, TRUE);
 		drawCDKScroll(song_list, TRUE);
 		for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
 //		refreshCDKScreen(cdkscreen);

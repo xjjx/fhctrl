@@ -6,7 +6,6 @@
 
 extern struct FSTPlug* fst_get(uint8_t uuid);
 extern struct Song* song_new();
-extern void nLOG(char *fmt, ...);
 
 bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlug **fst) {
 	short i, j, sn = 0;
@@ -19,7 +18,7 @@ bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlu
 	config_setting_t* song_name;
 	config_setting_t* list;
 
-	nLOG("Save to %s", config_file);
+	LOG("Save to %s", config_file);
 
 	config_init(&cfg);
 
@@ -61,10 +60,10 @@ bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlu
 	config_destroy(&cfg);
 
 	if (ret == CONFIG_TRUE) {
-		nLOG("Save OK");
+		LOG("Save OK");
 		return true;
 	} else {
-		nLOG("Save Fail");
+		LOG("Save Fail");
 		return false;
 	}
 }
@@ -83,7 +82,7 @@ bool load_state(const char* config_file, struct Song **song_first, struct FSTPlu
 
 	config_init(&cfg);
 	if (!config_read_file(&cfg, config_file)) {
-		nLOG("%s:%d - %s",
+		LOG("%s:%d - %s",
 			config_file,
 			config_error_line(&cfg),
 			config_error_text(&cfg)

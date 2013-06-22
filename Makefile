@@ -6,7 +6,7 @@ DESTDIR =
 
 all: fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect test
 
-fhctrl: nfhc.c config.c ftdilcd.c fhctrl.c
+fhctrl: nfhc.c config.c ftdilcd.c fhctrl.c log.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack -lconfig -lcdk -lcurses -lftdi -I/usr/include/cdk
 	
 fhctrl_sn: session_notify.c
