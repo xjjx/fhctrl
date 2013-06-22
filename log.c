@@ -9,6 +9,10 @@ void clear_log() {
 	remove ( logfile );
 }
 
+const char* get_logpath () {
+	return logfile;
+}
+
 void LOG(char *fmt, ...) {
 	FILE *f = fopen( logfile , "a" );
 	if (!f) {

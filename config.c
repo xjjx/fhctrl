@@ -18,8 +18,6 @@ bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlu
 	config_setting_t* song_name;
 	config_setting_t* list;
 
-	LOG("Save to %s", config_file);
-
 	config_init(&cfg);
 
 	// Save plugs
@@ -60,10 +58,10 @@ bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlu
 	config_destroy(&cfg);
 
 	if (ret == CONFIG_TRUE) {
-		LOG("Save OK");
+		LOG("Save to %s OK", config_file);
 		return true;
 	} else {
-		LOG("Save Fail");
+		LOG("Save to %s Fail", config_file);
 		return false;
 	}
 }

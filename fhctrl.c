@@ -135,15 +135,11 @@ struct Song* song_new() {
 }
 
 struct Song* song_get(short SongNumber) {
-	if (SongNumber >= SongCount)
-		return NULL;
+	if (SongNumber >= SongCount) return NULL;
 
-	struct Song* song;
+	struct Song* song = NULL;
 	int s = 0;
-	for(song=song_first; s < SongNumber; s++) {
-		song = song->next;
-		if (song == NULL) return NULL;
-	}
+	for(song=song_first; song && s < SongNumber; song = song->next, s++);
 
 	return song;
 }
