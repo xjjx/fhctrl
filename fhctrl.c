@@ -410,6 +410,17 @@ static void collect_rt_logs(char *fmt, ...) {
 	}
 }
 
+// Midi control channel handling - true if handled
+inline bool ctrl_channel_handling ( jack_midi_data_t data[] ) {
+	if ( (data[0] & 0x0F) == CtrlCh ) {
+		gui.ctrl_midi_in = true;
+
+		if ( (data[0] & 0xF0) == 0xC0 ) song_send( data[1] );
+		return true;
+	}
+	return false;
+}
+
 int process (jack_nframes_t frames, void* arg) {
 	void *inbuf, *outbuf;
 	jack_nframes_t i, count;
@@ -429,14 +440,7 @@ int process (jack_nframes_t frames, void* arg) {
 
 //		collect_rt_logs("MIDI: %X", event.buffer[0]);
 
-		// My Midi control channel handling
-		if ( (event.buffer[0] & 0x0F) == CtrlCh) {
-			gui.ctrl_midi_in = true;
-
-			if( (event.buffer[0] & 0xF0) == 0xC0 )
-				song_send(event.buffer[1]);
-			continue;
-		}
+		if ( ctrl_channel_handling ( event.buffer ) ) continue;
 
 		if ( event.size < 5 || event.buffer[0] != SYSEX_BEGIN ) continue;
 		gui.sysex_midi_in = true;
@@ -521,8 +525,11 @@ int process (jack_nframes_t frames, void* arg) {
 	count = jack_midi_get_event_count (inbuf);
 	for (i = 0; i < count; ++i) {
 		if (jack_midi_event_get (&event, inbuf, i) != 0) break;
+
+		if ( ctrl_channel_handling ( event.buffer ) ) continue;
+
 		gui.midi_in = true;
-		if (jack_midi_event_write(outbuf, event.time, event.buffer, event.size) ) {
+		if ( jack_midi_event_write(outbuf, event.time, event.buffer, event.size) ) {
 			collect_rt_logs("Forward - Write dropped (buffer size: %d)", jack_midi_max_event_size(outbuf));
 			break;
 		}

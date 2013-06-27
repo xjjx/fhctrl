@@ -120,7 +120,6 @@ static int get_value_dialog (CDKSCREEN *cdkscreen, char *title, char *label, cha
 	CDKITEMLIST *valuelist;
 	char ttitle[20];
 	char tlabel[20];
-	int ret = 0, choice;
 
 	snprintf(ttitle, sizeof ttitle, "<C>%s:", title);
 	snprintf(tlabel, sizeof tlabel, "</U/05>%s:", label);
@@ -129,7 +128,7 @@ static int get_value_dialog (CDKSCREEN *cdkscreen, char *title, char *label, cha
 	if (!valuelist) return 0;
 
 	/* Activate the widget. */
-	choice = activateCDKItemlist (valuelist, NULL);
+	int choice = activateCDKItemlist (valuelist, NULL);
 
 	/* Check how they exited from the widget. */
 	if (valuelist->exitType == vNORMAL) {
@@ -141,11 +140,10 @@ static int get_value_dialog (CDKSCREEN *cdkscreen, char *title, char *label, cha
 		mesg[3] = "<C>Press any key to continue.";
 		popupLabel (ScreenOf (valuelist), mesg, 4);
 */
-		ret = choice + 1;
 	}
 	destroyCDKItemlist(valuelist);
 
-	return ret;
+	return ++choice;
 }
 
 static int edit_selector(CDKSCREEN *cdkscreen, struct FSTPlug **fst) {
