@@ -243,7 +243,6 @@ void nfhc (struct CDKGUI *gui) {
 	bool ctrl_midi_in_state = false;
 	bool sysex_midi_in_state = false;
 	CDKSCREEN *cdkscreen;
-	CDKLABEL *top_logo;
 	CDKLABEL *midi_light;
 	CDKLABEL *ctrl_light;
 	CDKLABEL *sysex_light;
@@ -269,9 +268,9 @@ void nfhc (struct CDKGUI *gui) {
 	mesg[2] ="</56>\\ \\  __\\ \\ \\  __ \\  \\ \\ \\____  \\/_/\\ \\/ \\ \\  __<   \\ \\ \\____";
 	mesg[3] ="</56> \\ \\_\\    \\ \\_\\ \\_\\  \\ \\_____\\    \\ \\_\\  \\ \\_\\ \\_\\  \\ \\_____\\";
 	mesg[4] ="</56>  \\/_/     \\/_/\\/_/   \\/_____/     \\/_/   \\/_/ /_/   \\/_____/ proudly done by Xj";
-	top_logo = newCDKLabel (cdkscreen, LEFT_MARGIN+10, TOP, mesg, 5, FALSE, FALSE);
+	CDKLABEL* top_logo = newCDKLabel (cdkscreen, LEFT_MARGIN+10, 0, mesg, 5, FALSE, FALSE);
 	drawCDKLabel(top_logo, TRUE);
-
+	
 	/* Create Song List */
 	song_list = newCDKScroll (
 		cdkscreen, RIGHT_MARGIN, TOP_MARGIN, RIGHT, SONGWIN_HEIGHT, SONGWIN_WIDTH,
@@ -317,6 +316,11 @@ void nfhc (struct CDKGUI *gui) {
 		}
 	}
 
+	mesg[0] ="</32> q - quit, s - set song, n - new song, u - update song, g - change song name, i - send ident request, w - write config";
+	mesg[1] = "</32> e - edit, l - show log";
+	CDKLABEL* foot = newCDKLabel (cdkscreen, LEFT_MARGIN, TOP_MARGIN+(8*4), mesg, 2, FALSE, FALSE);
+	drawCDKLabel(foot, TRUE);
+
 	noecho();
 	filter();
 	wtimeout(top_logo->win, 300);
@@ -347,6 +351,7 @@ void nfhc (struct CDKGUI *gui) {
 		drawCDKLabel(top_logo, TRUE);
 		drawCDKScroll(song_list, TRUE);
 		for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
+		drawCDKLabel(foot, TRUE);
 //		refreshCDKScreen(cdkscreen);
 
 		j = wgetch(top_logo->win);
