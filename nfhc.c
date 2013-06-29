@@ -165,6 +165,7 @@ static int edit_selector(CDKSCREEN *cdkscreen, struct FSTPlug **fst) {
 		valfstmap[count] = i;
 		snprintf(values[count++], 40, "<C>%s", fp->name);
 	}
+	if (count == 0) return 0;
 	plug = get_value_dialog (cdkscreen, "Select device", "Device", values, 0, count);
 	if (!plug) return 0;
 	fp = fst[ valfstmap[--plug] ];
@@ -242,6 +243,7 @@ void nfhc (struct CDKGUI *gui) {
 	bool midi_in_state = false;
 	bool ctrl_midi_in_state = false;
 	bool sysex_midi_in_state = false;
+	bool need_redraw = true;
 	CDKSCREEN *cdkscreen;
 	CDKLABEL *midi_light;
 	CDKLABEL *ctrl_light;
@@ -269,7 +271,6 @@ void nfhc (struct CDKGUI *gui) {
 	mesg[3] ="</56> \\ \\_\\    \\ \\_\\ \\_\\  \\ \\_____\\    \\ \\_\\  \\ \\_\\ \\_\\  \\ \\_____\\";
 	mesg[4] ="</56>  \\/_/     \\/_/\\/_/   \\/_____/     \\/_/   \\/_/ /_/   \\/_____/ proudly done by Xj";
 	CDKLABEL* top_logo = newCDKLabel (cdkscreen, LEFT_MARGIN+10, 0, mesg, 5, FALSE, FALSE);
-	drawCDKLabel(top_logo, TRUE);
 	
 	/* Create Song List */
 	song_list = newCDKScroll (
@@ -279,13 +280,11 @@ void nfhc (struct CDKGUI *gui) {
 	refresh_song_list ( *gui->song_first );
 
 //	bindCDKObject(vSCROLL, song_list, 'q', kurwa_jebana, NULL);
-	drawCDKScroll(song_list, TRUE);
 
 	cpu_usage = newCDKSlider (
 		cdkscreen, RIGHT_MARGIN, TOP_MARGIN+25, "DSP LOAD [%]", "",
 		A_REVERSE|' ', SONGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE
 	);
-	drawCDKSlider(cpu_usage, FALSE);
 
 	mesg[0] = "MIDI IN";
 	midi_light = newCDKLabel (cdkscreen, RIGHT_MARGIN, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
@@ -341,18 +340,21 @@ void nfhc (struct CDKGUI *gui) {
 		if (gui->idle_cb) gui->idle_cb();
 
 		setCDKSliderValue(cpu_usage, cpu_load());
-		drawCDKSlider(cpu_usage, FALSE);
 
 		handle_light ( midi_light, &gui->midi_in, &midi_in_state );
 		handle_light ( ctrl_light, &gui->ctrl_midi_in, &ctrl_midi_in_state );
 		handle_light ( sysex_light, &gui->sysex_midi_in, &sysex_midi_in_state );
 
 		// Redraw
-		drawCDKLabel(top_logo, TRUE);
-		drawCDKScroll(song_list, TRUE);
-		for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
-		drawCDKLabel(foot, TRUE);
-//		refreshCDKScreen(cdkscreen);
+		if (need_redraw) {
+			need_redraw = false;
+			drawCDKLabel(top_logo, TRUE);
+			drawCDKScroll(song_list, TRUE);
+			for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
+			drawCDKSlider(cpu_usage, FALSE);
+			drawCDKLabel(foot, TRUE);
+//			refreshCDKScreen(cdkscreen);
+		}
 
 		j = wgetch(top_logo->win);
 		switch(j) {
@@ -373,13 +375,15 @@ void nfhc (struct CDKGUI *gui) {
 			case 'n': ;
 				struct Song *song = song_new();
 				change_song_name ( cdkscreen , *gui->song_first, song );
+				need_redraw = true;
 				break;
 			case 'g':
 				change_song_name ( cdkscreen , *gui->song_first, song_get ( getCDKScrollCurrent ( song_list ) ) );
+				need_redraw = true;
 				break;
 			case 'w': update_config(); break; // Update config file
-			case 'e': edit_selector (cdkscreen, fst); break;
-			case 'l': show_log(cdkscreen); break;
+			case 'e': edit_selector (cdkscreen, fst); need_redraw = true; break;
+			case 'l': show_log(cdkscreen); need_redraw = true; break;
 		}
 	}
 

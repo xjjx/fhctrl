@@ -413,7 +413,8 @@ static void collect_rt_logs(char *fmt, ...) {
 // Midi control channel handling - true if handled
 inline bool ctrl_channel_handling ( jack_midi_data_t data[] ) {
 	if ( (data[0] & 0x0F) == CtrlCh ) {
-		gui.ctrl_midi_in = true;
+		// Don't shine for realitime messages
+		if ( data[0] < 0xF0 ) gui.ctrl_midi_in = true;
 
 		if ( (data[0] & 0xF0) == 0xC0 ) song_send( data[1] );
 		return true;
