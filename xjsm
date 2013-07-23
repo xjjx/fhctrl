@@ -3,10 +3,6 @@
 #set -x
 
 export VST_PATH="$HOME/VST:/usr/share/vst"
-#export XTERM='gnome-terminal -x'
-export XTERM='xterm -geometry 132x43 -e'
-#export XTERM='screen -T xterm-color -Dm'
-#export XTERM='start_in_tmux'
 export PATH=".:/home/xj/Muzyka/fsthost/trunk:$PATH"
 #export PATH="/home/studio/SVN/fhctrl:/media/bigpig/secure/XJ/lvst/fsthost/trunk:$PATH"
 export FSTHOST_GUI=1
@@ -16,6 +12,30 @@ export WINE_SRV_RT=${WINE_SRV_RT:-15}
 MODE=$1
 SES_PATH=${2%/}
 LOGDIR='/tmp/log'
+
+exists() {
+	type $1 >/dev/null 2>&1
+}
+
+detect_xterminal() {
+	if exists 'gnome-terminal'; then
+		XTERM='gnome-terminal -x'
+	elif exists 'xfce4-terminal'; then
+		XTERM='xfce4-terminal -x'
+	elif exists 'xterm'; then
+		XTERM='xterm -geometry 132x43 -e'
+	elif exists 'tmux'; then
+		XTERM='start_in_tmux'
+	elif exists 'screen'; then
+		XTERM='screen -T xterm-color -Dm'
+	else
+		echo 'Cannot detect xterminal'
+		return 1
+	fi
+
+	export XTERM
+	return 0
+}
 
 usage() {
 	echo "Usage: $0 load|save SessionPath"
@@ -111,10 +131,11 @@ fi
 
 case $MODE in
 	'load')
-		start_jack || exit 1
-		start_wine || exit 2
-		start_ses || exit 3
+		detect_xterminal || exit 1
+		start_jack || exit 2
+		start_wine || exit 3
+		start_ses || exit 4
 		;;
-	'save') ses_save || exit 4;;
+	'save') ses_save || exit 5;;
 	*) usage
 esac
