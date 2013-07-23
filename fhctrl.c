@@ -269,8 +269,8 @@ void song_send(short SongNumber) {
 		case FST_TYPE_DEVICE: ;
 			// For devices just send ProgramChange
 			jack_midi_data_t pc[2];
-			pc[0] = fp->state->channel - 1;
-			pc[0] &= 0x0F | 0xC0;
+			pc[0] = ( fp->state->channel - 1 ) & 0x0F;
+			pc[0] |= 0xC0;
 			pc[1] = fp->state->program & 0x0F;
 			queue_midi_out( pc, sizeof (pc), "SendSong", fp->id);
 			break;
