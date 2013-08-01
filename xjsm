@@ -18,10 +18,10 @@ exists() {
 }
 
 detect_xterminal() {
-	if exists 'gnome-terminal'; then
-		XTERM='gnome-terminal -x'
-	elif exists 'xfce4-terminal'; then
-		XTERM='xfce4-terminal -x'
+	if exists 'xfce4-terminal'; then
+		XTERM='xfce4-terminal --geometry 132x43 -x'
+	elif exists 'gnome-terminal'; then
+		XTERM='gnome-terminal --geometry 132x43 -x'
 	elif exists 'xterm'; then
 		XTERM='xterm -geometry 132x43 -e'
 	elif exists 'tmux'; then
