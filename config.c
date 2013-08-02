@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "fhctrl.h"
+#include "log.h"
 
 extern struct FSTPlug* fst_get(uint8_t uuid);
 extern struct Song* song_new();

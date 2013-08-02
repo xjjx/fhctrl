@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <cdk.h>
 #include "fhctrl.h"
+#include "log.h"
 
 #define LEFT_MARGIN	0	/* Where the plugin boxes start */
 #define RIGHT_MARGIN	80	/* Where the infoboxes start */
@@ -52,6 +53,12 @@ int get_status_color ( struct FSTPlug* fp ) {
 	}
 
 	return 0;
+}
+
+void nLOG ( char *msg, void *user_data ) {
+	CDKSWINDOW *short_log = (CDKSWINDOW*) user_data;
+
+	addCDKSwindow ( short_log, msg, BOTTOM );
 }
 
 static void show_log (CDKSCREEN *cdkscreen) {
@@ -232,9 +239,16 @@ void handle_light (CDKLABEL *label, bool* gui_in, bool* state) {
 	if (*state != *gui_in) {
 		*state = *gui_in;
 		setCDKLabelBackgroundColor(label, (*state) ? "</B/24>" : "</B/64>");
-		drawCDKLabel(label, TRUE);
+		drawCDKLabel(label, FALSE);
 	}
 	*gui_in = false;
+}
+
+void handle_slider ( CDKSLIDER *slider, int new_value ) {
+	if ( new_value == getCDKSliderValue( slider ) ) return;
+
+	setCDKSliderValue(slider, new_value);
+	drawCDKSlider(slider, FALSE);
 }
 
 void nfhc (struct CDKGUI *gui) {
@@ -249,6 +263,7 @@ void nfhc (struct CDKGUI *gui) {
 	CDKLABEL *ctrl_light;
 	CDKLABEL *sysex_light;
 	CDKSLIDER *cpu_usage;
+	CDKSWINDOW *short_log;
 	WINDOW *screen;
 	char *mesg[9];
 	struct labelbox selector[16];
@@ -268,9 +283,29 @@ void nfhc (struct CDKGUI *gui) {
 	mesg[0] ="</56> ______   __  __     ______     ______   ______     __";
 	mesg[1] ="</56>/\\  ___\\ /\\ \\_\\ \\   /\\  ___\\   /\\__  _\\ /\\  == \\   /\\ \\ ";
 	mesg[2] ="</56>\\ \\  __\\ \\ \\  __ \\  \\ \\ \\____  \\/_/\\ \\/ \\ \\  __<   \\ \\ \\____";
-	mesg[3] ="</56> \\ \\_\\    \\ \\_\\ \\_\\  \\ \\_____\\    \\ \\_\\  \\ \\_\\ \\_\\  \\ \\_____\\";
-	mesg[4] ="</56>  \\/_/     \\/_/\\/_/   \\/_____/     \\/_/   \\/_/ /_/   \\/_____/ proudly done by Xj";
-	CDKLABEL* top_logo = newCDKLabel (cdkscreen, LEFT_MARGIN+10, 0, mesg, 5, FALSE, FALSE);
+	mesg[3] ="</56> \\ \\_\\    \\ \\_\\ \\_\\  \\ \\_____\\    \\ \\_\\  \\ \\_\\ \\_\\  \\ \\_____\\ proudly";
+	mesg[4] ="</56>  \\/_/     \\/_/\\/_/   \\/_____/     \\/_/   \\/_/ /_/   \\/_____/ done by Xj";
+	CDKLABEL* top_logo = newCDKLabel (cdkscreen, LEFT_MARGIN, 0, mesg, 5, FALSE, FALSE);
+
+	mesg[0] = "MIDI IN";
+	midi_light = newCDKLabel (cdkscreen, RIGHT_MARGIN, 0, mesg, 1, FALSE, FALSE);
+	setCDKLabelBackgroundColor(midi_light, "</B/64>");
+	drawCDKLabel(midi_light, TRUE);
+
+	mesg[0] = "SYSEX IN";
+ 	sysex_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 10, 0, mesg, 1, FALSE, FALSE);
+	setCDKLabelBackgroundColor(sysex_light, "</B/64>");
+	drawCDKLabel(sysex_light, TRUE);
+
+	mesg[0] = "CTRL IN";
+	ctrl_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 21, 0, mesg, 1, FALSE, FALSE);
+	setCDKLabelBackgroundColor(ctrl_light, "</B/64>");
+	drawCDKLabel(ctrl_light, TRUE);
+
+	cpu_usage = newCDKSlider (
+		cdkscreen, RIGHT_MARGIN, 2, "DSP LOAD [%]", "",
+		A_REVERSE|' ', SONGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE
+	);
 	
 	/* Create Song List */
 	song_list = newCDKScroll (
@@ -279,27 +314,11 @@ void nfhc (struct CDKGUI *gui) {
 	);
 	refresh_song_list ( *gui->song_first );
 
+	short_log = newCDKSwindow ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+SONGWIN_HEIGHT, 7,
+		SONGWIN_WIDTH+1, NULL, 10, TRUE, FALSE);
+	set_logcallback ( nLOG, short_log );
+
 //	bindCDKObject(vSCROLL, song_list, 'q', kurwa_jebana, NULL);
-
-	cpu_usage = newCDKSlider (
-		cdkscreen, RIGHT_MARGIN, TOP_MARGIN+25, "DSP LOAD [%]", "",
-		A_REVERSE|' ', SONGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE
-	);
-
-	mesg[0] = "MIDI IN";
-	midi_light = newCDKLabel (cdkscreen, RIGHT_MARGIN, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
-	setCDKLabelBackgroundColor(midi_light, "</B/64>");
-	drawCDKLabel(midi_light, TRUE);
-
-	mesg[0] = "SYSEX IN";
- 	sysex_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 10, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
-	setCDKLabelBackgroundColor(sysex_light, "</B/64>");
-	drawCDKLabel(sysex_light, TRUE);
-
-	mesg[0] = "CTRL IN";
-	ctrl_light = newCDKLabel (cdkscreen, RIGHT_MARGIN + 21, TOP_MARGIN+29, mesg, 1, TRUE, FALSE);
-	setCDKLabelBackgroundColor(ctrl_light, "</B/64>");
-	drawCDKLabel(ctrl_light, TRUE);
 
 	/* SELECTOR init - same shit for all boxes */
 	{
@@ -316,7 +335,7 @@ void nfhc (struct CDKGUI *gui) {
 	}
 
 	mesg[0] ="</32> q - quit, s - set song, n - new song, u - update song, g - change song name, i - send ident request, w - write config";
-	mesg[1] = "</32> e - edit, l - show log";
+	mesg[1] = "</32> e - edit, l - show full log";
 	CDKLABEL* foot = newCDKLabel (cdkscreen, LEFT_MARGIN, TOP_MARGIN+(8*4), mesg, 2, FALSE, FALSE);
 	drawCDKLabel(foot, TRUE);
 
@@ -339,17 +358,19 @@ void nfhc (struct CDKGUI *gui) {
 
 		if (gui->idle_cb) gui->idle_cb();
 
-		setCDKSliderValue(cpu_usage, cpu_load());
 
 		handle_light ( midi_light, &gui->midi_in, &midi_in_state );
 		handle_light ( ctrl_light, &gui->ctrl_midi_in, &ctrl_midi_in_state );
 		handle_light ( sysex_light, &gui->sysex_midi_in, &sysex_midi_in_state );
+
+		handle_slider ( cpu_usage, cpu_load() );
 
 		// Redraw
 		if (need_redraw) {
 			need_redraw = false;
 			drawCDKLabel(top_logo, TRUE);
 			drawCDKScroll(song_list, TRUE);
+			drawCDKSwindow ( short_log, TRUE );
 			for (i = 0; i < 16; i++) drawCDKLabel(selector[i].label, TRUE);
 			drawCDKSlider(cpu_usage, FALSE);
 			drawCDKLabel(foot, TRUE);

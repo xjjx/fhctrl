@@ -3,8 +3,8 @@
 #include <ftdi.h>
 
 #include "ftdilcd.h"
+#include "log.h"
 
-extern void LOG(char *fmt, ...);
 
 /*
  * bitbang I/O pin mappings 

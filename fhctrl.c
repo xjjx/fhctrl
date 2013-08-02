@@ -20,6 +20,7 @@
 
 #include "sysex.h"
 #include "fhctrl.h"
+#include "log.h"
 
 #include "ftdilcd.h"
 

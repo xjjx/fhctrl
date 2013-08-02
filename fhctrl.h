@@ -56,9 +56,3 @@ struct CDKGUI {
 
 /* nfhc.c */
 void nfhc(struct CDKGUI *gui);
-
-/* log.c */
-void clear_log();
-const char* get_logpath ();
-void LOG(char *fmt, ...);
-
