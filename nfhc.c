@@ -303,8 +303,8 @@ void nfhc (struct CDKGUI *gui) {
 	drawCDKLabel(ctrl_light, TRUE);
 
 	cpu_usage = newCDKSlider (
-		cdkscreen, RIGHT_MARGIN, 2, "DSP LOAD [%]", "",
-		A_REVERSE|' ', SONGWIN_WIDTH-4, 0, 0, 100, 1, 10, TRUE, FALSE
+		cdkscreen, RIGHT_MARGIN-1, 2, "DSP LOAD [%]", "",
+		A_REVERSE|' ', SONGWIN_WIDTH, 0, 0, 100, 1, 10, TRUE, FALSE
 	);
 	
 	/* Create Song List */

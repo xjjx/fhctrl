@@ -530,6 +530,9 @@ int process (jack_nframes_t frames, void* arg) {
 
 		if ( ctrl_channel_handling ( event.buffer ) ) continue;
 
+		/* Filer out unneded messages - mostly active sensing */
+		if ( event.buffer[0] > 0xEF || event.buffer[0] < 0x80 ) continue;
+
 		gui.midi_in = true;
 		if ( jack_midi_event_write(outbuf, event.time, event.buffer, event.size) ) {
 			collect_rt_logs("Forward - Write dropped (buffer size: %d)", jack_midi_max_event_size(outbuf));

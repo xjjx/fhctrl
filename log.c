@@ -40,7 +40,7 @@ void LOG(char *fmt, ...) {
 	if (logcallback) {
 		char msg[256];
 		va_start ( args, fmt );
-		vsnprintf ( msg, 256, fmt, args );
+		vsnprintf ( msg, sizeof msg, fmt, args );
 		va_end ( args );
 		logcallback( msg, logcallback_user_data );
 	}
