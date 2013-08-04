@@ -5,9 +5,6 @@
 #include "fhctrl.h"
 #include "log.h"
 
-extern FSTPlug* fst_get(uint8_t uuid);
-extern Song* song_new();
-
 bool dump_state(char const* config_file, Song **songs, FSTPlug **fst) {
 	short i, j, sn = 0;
 	int ret;
@@ -97,7 +94,7 @@ bool load_state(const char* config_file, Song **songs, FSTPlug **fst) {
 		plugName = config_setting_name(list);
 
 		id = config_setting_get_int_elem(list, 0);
-		f = fst_get(id);
+		f = fst_get(fst, songs, id);
 		f->type = config_setting_get_int_elem(list, 1);
 
 		sparam = config_setting_get_string_elem(list, 2);
@@ -113,7 +110,7 @@ again:
 
 		// Create new song if needed
 		if (! song) {
-			song = song_new();
+			song = song_new(songs, fst);
 			snprintf(name, sizeof name, "song%d.name", s);
 			const char* value;
 			if ( config_lookup_string ( &cfg, name, &value ) ) {

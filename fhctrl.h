@@ -45,16 +45,44 @@ struct LCDScreen {
 };
 
 struct CDKGUI {
-	Song** songs;
-	FSTPlug** fst;
 	bool midi_in;
 	bool ctrl_midi_in;
 	bool sysex_midi_in;
 	bool lcd_need_update;
-	void (*idle_cb)(void* arg);
-	void* user;
 };
 
+typedef struct _FHCTRL {
+	/* Our private variables */
+	const char*		config_file;
+	bool			try_connect_to_physical;
+	uint8_t			offered_last;
+	uint8_t			offered_last_choke;
+	uint8_t			graph_order_changed;
+	Song*			song_first;
+	void*			user;
+	void (*idle_cb)(void* arg);
+
+	/* Public variables */
+	FSTPlug*		fst[128];
+	Song**			songs;
+	struct CDKGUI		gui;
+	struct LCDScreen	lcd_screen;
+} FHCTRL;
+
 /* nfhc.c */
-void nfhc(struct CDKGUI *gui);
+void nfhc(FHCTRL* fhctrl);
+
+/* Exported functions */
+void send_ident_request( FHCTRL* fhctrl );
+void song_send( FHCTRL* fhctrl, short SongNumber);
+Song* song_new(Song** songs, FSTPlug** fst);
+Song* song_get(Song** songs, short SongNumber);
+void song_update(FSTPlug** fst, Song* song);
+void update_config( FHCTRL* fhctrl );
+int cpu_load( FHCTRL* fhctrl );
+FSTState* state_new();
+FSTPlug* fst_get ( FSTPlug** fst, Song** songs, uint8_t uuid );
+FSTPlug* fst_next(FSTPlug** fst, FSTPlug* prev);
+void fst_send(FHCTRL* fhctrl, FSTPlug* fp);
+void send_dump_request(FHCTRL* fhctrl, short id);
 

@@ -41,28 +41,11 @@ typedef struct _FJACK {
 	jack_nframes_t		sample_rate;
 	jack_session_event_t*	session_event;
 	const char*		session_uuid;
+	bool			need_ses_reply;
 	jack_ringbuffer_t*	log_collector;
 	jack_ringbuffer_t*	buffer_midi_out;
 	void*			user;
 } FJACK;
-
-typedef struct _FHCTRL {
-	/* Our private variables */
-	const char*		config_file;
-	bool			need_ses_reply;
-	bool			try_connect_to_physical;
-	uint8_t			offered_last;
-	uint8_t			offered_last_choke;
-	uint8_t			graph_order_changed;
-	Song*			song_first;
-	void*			user;
-
-	/* Public variables */
-	FSTPlug*		fst[128];
-	Song**			songs;
-	struct CDKGUI		gui;
-	struct LCDScreen	lcd_screen;
-} FHCTRL;
 
 /* Declarations */
 static void collect_rt_logs(FJACK* fjack, char *fmt, ...);
@@ -231,12 +214,14 @@ static void detect_na( FHCTRL* fhctrl ) {
 	}
 }
 
-void send_dump_request(jack_ringbuffer_t* rbuf, short id) {
+void send_dump_request( FHCTRL* fhctrl , short id ) {
+	FJACK* fjack = (FJACK*) fhctrl->user;
+
 	SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
 	sysex_dump_request.uuid = id;
 	LOG("Sent dump request for ID:%d", id);
 	queue_midi_out(
-		rbuf,
+		fjack->buffer_midi_out,
 		(jack_midi_data_t*) &sysex_dump_request,
 		sizeof(SysExDumpRequestV1),
 		"SendDumpRequest",
@@ -250,7 +235,7 @@ void inline send_offer(FHCTRL* fhctrl, SysExIdentReply* r) {
 	SysExIdOffer sysex_offer = SYSEX_OFFER;
 
 	/* No more free id ? :-( */
-	if ( (sysex_offer.uuid = fst_uniqe_id(fhctrl->fst, fhctrl->offered_last + 1) == 0) ) return;
+	if ( (sysex_offer.uuid = fst_uniqe_id(fhctrl->fst, fhctrl->offered_last + 1)) == 0 ) return;
 	fhctrl->offered_last_choke = 10;
 
 	memcpy(sysex_offer.rnid, r->version, sizeof(sysex_offer.rnid));
@@ -270,7 +255,8 @@ void inline send_offer(FHCTRL* fhctrl, SysExIdentReply* r) {
 	);
 }
 
-void fst_send(FSTPlug* fp, jack_ringbuffer_t* rbuf) {
+void fst_send(FHCTRL* fhctrl, FSTPlug* fp) {
+	FJACK* fjack = (FJACK*) fhctrl->user;
 	FSTState* fs = fp->state;
 
 	SysExDumpV1 sysex_dump = SYSEX_DUMP;
@@ -285,7 +271,7 @@ void fst_send(FSTPlug* fp, jack_ringbuffer_t* rbuf) {
 	memcpy(sysex_dump.plugin_name, fp->name, sizeof(sysex_dump.plugin_name));
 
 	queue_midi_out(
-		rbuf,
+		fjack->buffer_midi_out,
 		(jack_midi_data_t*) &sysex_dump,
 		sizeof(SysExDumpV1),
 		"SendSong",
@@ -331,7 +317,7 @@ void song_send(FHCTRL* fhctrl, short SongNumber) {
 			if (curState == FST_NA) {
 				fp->state->state = FST_NA;
 			} else {
-				fst_send(fp, fjack->buffer_midi_out);
+				fst_send(fhctrl, fp);
 			}
 			break;
 		}
@@ -369,10 +355,11 @@ void update_lcd( struct LCDScreen* lcd_screen ) {
 	lcd_text(0,2,fp->name);			// Line 3
 }
 
-static void session_reply( FHCTRL* fhctrl ) {
+static void session_reply( FJACK* fjack ) {
 	LOG("session callback");
 
-	FJACK* fjack = (FJACK*) fhctrl->user;
+	FHCTRL* fhctrl = (FHCTRL*) fjack->user;
+
 	char *restore_cmd = malloc(256);
 	char filename[FILENAME_MAX];
 	jack_session_event_t* sev = fjack->session_event;
@@ -411,9 +398,8 @@ static void connect_to_physical( FJACK* j ) {
 
 void session_callback_handler(jack_session_event_t *event, void* arg) {
 	FJACK* fjack = (FJACK*) arg;
-	FHCTRL* fhctrl = (FHCTRL*) fjack->user;
 	fjack->session_event = event;
-	fhctrl->need_ses_reply = true;
+	fjack->need_ses_reply = true;
 }
 
 int graph_order_callback_handler( void *arg ) {
@@ -431,8 +417,7 @@ void registration_handler(jack_port_id_t port_id, int reg, void *arg) {
 	if (reg != 0) fhctrl->try_connect_to_physical = true;
 }
 
-int cpu_load( void* ptr ) {
-	FHCTRL* fhctrl = (FHCTRL*) ptr;
+int cpu_load( FHCTRL* fhctrl ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 	return (int) jack_cpu_load(fjack->client);
 }
@@ -526,7 +511,7 @@ int process (jack_nframes_t frames, void* arg) {
 					// Note: we refresh GUI when dump back to us
 					fp = fst_get( fhctrl->fst, fhctrl->songs, r->model[0] );
 					fp->type = FST_TYPE_PLUGIN; // We just know this ;-)
-					send_dump_request(j->buffer_midi_out, fp->id);
+					send_dump_request(fhctrl, fp->id);
 				}
 			} /* else { Regular device - not supported yet } */
 			break;
@@ -621,9 +606,9 @@ void idle_cb( void* arg ) {
 	}
 
 	/* If Jack need our answer */
-	if (fhctrl->need_ses_reply) {
-		fhctrl->need_ses_reply = false;
-		session_reply( fhctrl );
+	if (fjack->need_ses_reply) {
+		fjack->need_ses_reply = false;
+		session_reply( fjack );
 	}
 
 	/* Try connect to physical ports */
@@ -688,14 +673,9 @@ void fhctrl_init( FHCTRL* fhctrl ) {
 	/* Try detect on start */
 	fhctrl->graph_order_changed = 1;
 
-	// GUI Init
-	struct CDKGUI* gui = &fhctrl->gui;
-	gui->songs = fhctrl->songs;
-	gui->fst = fhctrl->fst;
-	gui->idle_cb = idle_cb;
-	gui->user = (void*) fhctrl;
+	// Set pointer to idle callback
+	fhctrl->idle_cb = idle_cb;
 }
-
 
 int main (int argc, char* argv[]) {
 	FHCTRL fhctrl = (FHCTRL) {0};
@@ -721,7 +701,7 @@ int main (int argc, char* argv[]) {
 	if (fhctrl.config_file) load_state(fhctrl.config_file, fhctrl.songs, fhctrl.fst);
 
 	// ncurses GUI loop
-	nfhc(&fhctrl.gui);
+	nfhc(&fhctrl);
 
 	jack_deactivate ( fjack.client );
 	jack_client_close ( fjack.client );

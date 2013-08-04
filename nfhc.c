@@ -28,18 +28,6 @@ struct labelbox {
 
 CDKSCROLL *song_list;
 bool quit = false;
-extern void send_ident_request(); // From fhctrl.c
-extern void song_send(void* ptr, short SongNumber);
-extern Song* song_new(Song** songs, FSTPlug** fst);
-extern Song* song_get(Song** songs, short SongNumber);
-extern void song_update(FSTPlug** fst, Song* song);
-extern void update_config(Song** song, FSTPlug** fst);
-extern int cpu_load( void* ptr );
-extern FSTState* state_new();
-extern FSTPlug* fst_next(FSTPlug** fst, FSTPlug* prev);
-extern void fst_send(FSTPlug* fp);
-extern void send_dump_request(short id);
-
 int get_status_color ( FSTPlug* fp ) {
 	switch ( fp->state->state ) {
 		case FST_STATE_BYPASS: return 58;
@@ -153,10 +141,11 @@ static int get_value_dialog (CDKSCREEN *cdkscreen, char *title, char *label, cha
 	return ++choice;
 }
 
-static int edit_selector(CDKSCREEN *cdkscreen, FSTPlug **fst) {
+static int edit_selector(CDKSCREEN *cdkscreen, FHCTRL* fhctrl) {
 	unsigned short i, count, plug;
-	FSTPlug *fp;
-	FSTState *fs;
+	FSTPlug** fst = fhctrl->fst;
+	FSTPlug* fp;
+	FSTState* fs;
 	char *values[128];
 	unsigned short valfstmap[128];
 
@@ -206,8 +195,8 @@ static int edit_selector(CDKSCREEN *cdkscreen, FSTPlug **fst) {
 
 	*fp->state = *fs;
 
-	fst_send(fp);
-	send_dump_request(fp->id);
+	fst_send(fhctrl, fp);
+	send_dump_request(fhctrl, fp->id);
 
 	return 1;
 }
@@ -251,7 +240,7 @@ void handle_slider ( CDKSLIDER *slider, int new_value ) {
 	drawCDKSlider(slider, FALSE);
 }
 
-void nfhc (struct CDKGUI *gui) {
+void nfhc ( FHCTRL* fhctrl ) {
 	short i, j;
 	int lm = 0, tm = 0;
 	bool midi_in_state = false;
@@ -267,7 +256,7 @@ void nfhc (struct CDKGUI *gui) {
 	WINDOW *screen;
 	char *mesg[9];
 	struct labelbox selector[16];
-	FSTPlug **fst = gui->fst;
+	FSTPlug **fst = fhctrl->fst;
 
 	/* Initialize the Cdk screen.  */
 	screen = initscr();
@@ -312,7 +301,7 @@ void nfhc (struct CDKGUI *gui) {
 		cdkscreen, RIGHT_MARGIN, TOP_MARGIN, RIGHT, SONGWIN_HEIGHT, SONGWIN_WIDTH,
 		"</U/63>Select song:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
 	);
-	refresh_song_list ( gui->songs );
+	refresh_song_list ( fhctrl->songs );
 
 	short_log = newCDKSwindow ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+SONGWIN_HEIGHT, 7,
 		SONGWIN_WIDTH+1, NULL, 10, TRUE, FALSE);
@@ -352,18 +341,18 @@ void nfhc (struct CDKGUI *gui) {
 			if (selector[i].fstid == fp->id && !fp->change) continue;
 			
 			fp->change = false;
-			gui->lcd_need_update = true;
+			fhctrl->gui.lcd_need_update = true;
 			update_selector(&selector[i], fp);
 		}
 
-		if (gui->idle_cb) gui->idle_cb( gui->user );
+		if (fhctrl->idle_cb) fhctrl->idle_cb( fhctrl );
 
 
-		handle_light ( midi_light, &gui->midi_in, &midi_in_state );
-		handle_light ( ctrl_light, &gui->ctrl_midi_in, &ctrl_midi_in_state );
-		handle_light ( sysex_light, &gui->sysex_midi_in, &sysex_midi_in_state );
+		handle_light ( midi_light, &fhctrl->gui.midi_in, &midi_in_state );
+		handle_light ( ctrl_light, &fhctrl->gui.ctrl_midi_in, &ctrl_midi_in_state );
+		handle_light ( sysex_light, &fhctrl->gui.sysex_midi_in, &sysex_midi_in_state );
 
-		handle_slider ( cpu_usage, cpu_load( gui->user ) );
+		handle_slider ( cpu_usage, cpu_load( fhctrl ) );
 
 		// Redraw
 		if (need_redraw) {
@@ -383,28 +372,28 @@ void nfhc (struct CDKGUI *gui) {
 		 	case 's': // Set Song
 				setCDKScrollHighlight(song_list, A_REVERSE);
 				tm = activateCDKScroll(song_list, NULL);
-				song_send(gui->user, tm);
+				song_send(fhctrl, tm);
 				setCDKScrollHighlight(song_list, A_NORMAL);
 				break;
 			case 'u': // Update Song
 				setCDKScrollHighlight(song_list, A_REVERSE);
 				tm = activateCDKScroll(song_list, NULL);
-				song_update( fst, song_get( gui->songs, tm) );
+				song_update( fst, song_get( fhctrl->songs, tm) );
 				setCDKScrollHighlight(song_list, A_NORMAL);
 				break;
-			case 'i': send_ident_request(); break;
+			case 'i': send_ident_request( fhctrl ); break;
 			case 'n': ;
-				Song *song = song_new(gui->songs, fst);
-				change_song_name ( cdkscreen , gui->songs, song );
+				Song *song = song_new(fhctrl->songs, fst);
+				change_song_name ( cdkscreen , fhctrl->songs, song );
 				need_redraw = true;
 				break;
 			case 'g':
 				tm = getCDKScrollCurrent ( song_list );
-				change_song_name ( cdkscreen , gui->songs, song_get ( gui->songs, tm ) );
+				change_song_name ( cdkscreen , fhctrl->songs, song_get ( fhctrl->songs, tm ) );
 				need_redraw = true;
 				break;
-			case 'w': update_config(gui->songs, gui->fst); break; // Update config file
-			case 'e': edit_selector (cdkscreen, fst); need_redraw = true; break;
+			case 'w': update_config( fhctrl ); break; // Update config file
+			case 'e': edit_selector (cdkscreen, fhctrl); need_redraw = true; break;
 			case 'l': show_log(cdkscreen); need_redraw = true; break;
 		}
 	}
