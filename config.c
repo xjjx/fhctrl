@@ -5,15 +5,15 @@
 #include "fhctrl.h"
 #include "log.h"
 
-extern struct FSTPlug* fst_get(uint8_t uuid);
-extern struct Song* song_new();
+extern FSTPlug* fst_get(uint8_t uuid);
+extern Song* song_new();
 
-bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlug **fst) {
+bool dump_state(char const* config_file, Song **songs, FSTPlug **fst) {
 	short i, j, sn = 0;
 	int ret;
 	char name[24];
-	struct Song* s;
-	struct FSTState* fs;
+	Song* s;
+	FSTState* fs;
 	config_t cfg;
 	config_setting_t* group;
 	config_setting_t* song_name;
@@ -34,7 +34,7 @@ bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlu
 	}
 
 	// Save songs
-	for(s = *song_first; s; s = s->next) {
+	for(s = *songs; s; s = s->next) {
 		snprintf(name, sizeof name, "song%d", sn++);
 		group = config_setting_add(cfg.root, name, CONFIG_TYPE_GROUP);
 
@@ -67,10 +67,10 @@ bool dump_state(char const* config_file, struct Song **song_first, struct FSTPlu
 	}
 }
 
-bool load_state(const char* config_file, struct Song **song_first, struct FSTPlug **fst) {
-	struct FSTPlug* f;
-	struct FSTState* fs;
-	struct Song* song;
+bool load_state(const char* config_file, Song **songs, FSTPlug **fst) {
+	FSTPlug* f;
+	FSTState* fs;
+	Song* song;
 	config_t cfg;
 	config_setting_t* global;
 	config_setting_t* list;
@@ -105,7 +105,7 @@ bool load_state(const char* config_file, struct Song **song_first, struct FSTPlu
 
 		// Songs iteration
 		s = 0;
-		song = *song_first;
+		song = *songs;
 
 again:
 		snprintf(name, sizeof name, "song%d", s);

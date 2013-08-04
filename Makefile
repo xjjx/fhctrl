@@ -4,7 +4,7 @@ DESTDIR =
 
 .PHONY: all,clean
 
-all: fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect test
+all: fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect
 
 fhctrl: nfhc.c config.c ftdilcd.c fhctrl.c log.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack -lconfig -lcdk -lcurses -lftdi -I/usr/include/cdk
@@ -24,8 +24,11 @@ colors: colors.c
 test: test.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack
 
+inprocess: inprocess.c
+	$(CC) $(CFLAGS) -o $@ $^ -fPIC -shared -ljack
+
 clean:
-	rm -f fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect colors test
+	rm -f fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect colors test inprocess
 
 install: all
 	install -Dm755 fhctrl $(DESTDIR)/usr/bin/fhctrl
