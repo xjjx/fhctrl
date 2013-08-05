@@ -73,6 +73,8 @@ typedef struct _FHCTRL {
 void nfhc(FHCTRL* fhctrl);
 
 /* Exported functions */
+Song* song_first ( Song** songs );
+short song_count( Song** songs );
 void send_ident_request( FHCTRL* fhctrl );
 void song_send( FHCTRL* fhctrl, short SongNumber);
 Song* song_new(Song** songs, FSTPlug** fst);

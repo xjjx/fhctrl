@@ -28,8 +28,8 @@
 #define CLIENT_NAME "FHControl"
 
 // Config file support
-bool dump_state(char const* config_file, Song** songs, FSTPlug** fst);
-bool load_state(const char* config_file, Song** songs, FSTPlug** fst);
+bool dump_state( FHCTRL* fhctrl );
+bool load_state( FHCTRL* fhctrl );
 
 typedef struct _FJACK {
 	jack_client_t*		client;
@@ -50,7 +50,6 @@ typedef struct _FJACK {
 /* Declarations */
 static void collect_rt_logs(FJACK* fjack, char *fmt, ...);
 void idle_cb( void* arg );
-short song_count( Song** songs );
 
 /* Functions */
 void jack_log(const char *msg) { LOG((char*) msg); }
@@ -76,7 +75,7 @@ void fst_new ( FSTPlug** fst, Song** songs, uint8_t uuid ) {
 
 	// Add states to songs
 	Song* s;
-	for(s = *songs; s; s = s->next)
+	for(s = song_first(songs); s; s = s->next)
 		s->fst_state[uuid] = state_new();
 
 	// Fill our global array
@@ -107,7 +106,6 @@ FSTPlug* fst_next ( FSTPlug** fst, FSTPlug* prev ) {
 
 Song* song_new(Song** songs, FSTPlug** fst) {
 	uint8_t i;
-	Song** snptr;
 	Song* s = calloc(1, sizeof(Song));
 
 	//LOG("Creating new song");
@@ -122,14 +120,9 @@ Song* song_new(Song** songs, FSTPlug** fst) {
 	snprintf(s->name, sizeof s->name, "Song %d", song_count(songs) );
 
 	// Bind to song list
-	if (*songs) {
-		snptr = songs;
-		while(*snptr) { snptr = &(*snptr)->next; }
-		*snptr = s;
-	} else {
-		/* Set first song */
-		*songs = s;
-	}
+	Song** sptr = songs;
+	while (*sptr) sptr = &( (*sptr)->next );
+	*sptr = s;
 
 	return s;
 }
@@ -144,10 +137,14 @@ Song* song_get(Song** songs, short SongNumber) {
 	return song;
 }
 
+Song* song_first ( Song** songs ) {
+	return *songs;
+}
+
 short song_count( Song** songs ) {
 	Song* s;
 	int count = 0;
-	for(s = *songs; s; s = s->next, count++);
+	for(s = song_first(songs); s; s = s->next, count++);
 	return count;
 }
 
@@ -366,7 +363,7 @@ static void session_reply( FJACK* fjack ) {
 
 	// Save state, set error if fail
 	snprintf(filename, sizeof(filename), "%sstate.cfg", sev->session_dir);
-	if (! dump_state(filename, fhctrl->songs, fhctrl->fst) )
+	if ( ! dump_state( fhctrl ) )
 		sev->flags |= JackSessionSaveError;
 
 	sev->flags |= JackSessionNeedTerminal;
@@ -591,7 +588,7 @@ int process (jack_nframes_t frames, void* arg) {
 }
 
 void update_config(FHCTRL* fhctrl) {
-	if (fhctrl->config_file) dump_state(fhctrl->config_file, fhctrl->songs, fhctrl->fst);
+	if (fhctrl->config_file) dump_state( fhctrl );
 }
 
 // Will be called from nfhc
@@ -698,7 +695,7 @@ int main (int argc, char* argv[]) {
 	init_lcd( &fhctrl.lcd_screen );
 
 	// Try read file
-	if (fhctrl.config_file) load_state(fhctrl.config_file, fhctrl.songs, fhctrl.fst);
+	if (fhctrl.config_file) load_state( &fhctrl );
 
 	// ncurses GUI loop
 	nfhc(&fhctrl);

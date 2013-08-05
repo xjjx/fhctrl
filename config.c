@@ -5,7 +5,7 @@
 #include "fhctrl.h"
 #include "log.h"
 
-bool dump_state(char const* config_file, Song **songs, FSTPlug **fst) {
+bool dump_state( FHCTRL* fhctrl ) {
 	short i, j, sn = 0;
 	int ret;
 	char name[24];
@@ -21,24 +21,24 @@ bool dump_state(char const* config_file, Song **songs, FSTPlug **fst) {
 	// Save plugs
 	group = config_setting_add(cfg.root, "global", CONFIG_TYPE_GROUP);
 	for (i = j = 0; i < 128; i++) {
-		if (fst[i] == NULL) continue;
+		if (fhctrl->fst[i] == NULL) continue;
 
 		snprintf(name, sizeof name, "plugin%d", j++);
 		list = config_setting_add(group, name, CONFIG_TYPE_LIST);
-		config_setting_set_int_elem(list, -1, fst[i]->id);
-		config_setting_set_int_elem(list, -1, fst[i]->type);
-		config_setting_set_string_elem(list, -1, fst[i]->name);
+		config_setting_set_int_elem(list, -1, fhctrl->fst[i]->id);
+		config_setting_set_int_elem(list, -1, fhctrl->fst[i]->type);
+		config_setting_set_string_elem(list, -1, fhctrl->fst[i]->name);
 	}
 
 	// Save songs
-	for(s = *songs; s; s = s->next) {
+	for(s = song_first(fhctrl->songs); s; s = s->next) {
 		snprintf(name, sizeof name, "song%d", sn++);
 		group = config_setting_add(cfg.root, name, CONFIG_TYPE_GROUP);
 
 		song_name = config_setting_add(group, "name", CONFIG_TYPE_STRING);
 		config_setting_set_string( song_name, s->name );
 		for (i = j = 0; i < 128; i++) {
-			if (fst[i] == NULL) continue;
+			if (fhctrl->fst[i] == NULL) continue;
 
 			fs = s->fst_state[i];
 
@@ -52,19 +52,19 @@ bool dump_state(char const* config_file, Song **songs, FSTPlug **fst) {
 		}
 	}
 
-	ret = config_write_file(&cfg, config_file);
+	ret = config_write_file(&cfg, fhctrl->config_file);
 	config_destroy(&cfg);
 
 	if (ret == CONFIG_TRUE) {
-		LOG("Save to %s OK", config_file);
+		LOG("Save to %s OK", fhctrl->config_file);
 		return true;
 	} else {
-		LOG("Save to %s Fail", config_file);
+		LOG("Save to %s Fail", fhctrl->config_file);
 		return false;
 	}
 }
 
-bool load_state(const char* config_file, Song **songs, FSTPlug **fst) {
+bool load_state( FHCTRL* fhctrl ) {
 	FSTPlug* f;
 	FSTState* fs;
 	Song* song;
@@ -77,9 +77,9 @@ bool load_state(const char* config_file, Song **songs, FSTPlug **fst) {
 	unsigned short id, i, s;
 
 	config_init(&cfg);
-	if (!config_read_file(&cfg, config_file)) {
+	if (!config_read_file(&cfg, fhctrl->config_file)) {
 		LOG("%s:%d - %s",
-			config_file,
+			fhctrl->config_file,
 			config_error_line(&cfg),
 			config_error_text(&cfg)
 		);
@@ -94,7 +94,7 @@ bool load_state(const char* config_file, Song **songs, FSTPlug **fst) {
 		plugName = config_setting_name(list);
 
 		id = config_setting_get_int_elem(list, 0);
-		f = fst_get(fst, songs, id);
+		f = fst_get(fhctrl->fst, fhctrl->songs, id);
 		f->type = config_setting_get_int_elem(list, 1);
 
 		sparam = config_setting_get_string_elem(list, 2);
@@ -102,7 +102,7 @@ bool load_state(const char* config_file, Song **songs, FSTPlug **fst) {
 
 		// Songs iteration
 		s = 0;
-		song = *songs;
+		song = song_first(fhctrl->songs);
 
 again:
 		snprintf(name, sizeof name, "song%d", s);
@@ -110,7 +110,7 @@ again:
 
 		// Create new song if needed
 		if (! song) {
-			song = song_new(songs, fst);
+			song = song_new(fhctrl->songs, fhctrl->fst);
 			snprintf(name, sizeof name, "song%d.name", s);
 			const char* value;
 			if ( config_lookup_string ( &cfg, name, &value ) ) {
