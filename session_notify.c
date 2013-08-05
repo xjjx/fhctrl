@@ -2,6 +2,7 @@
  *  session_notify.c -- ultra minimal session manager
  *
  *  Copyright (C) 2010 Torben Hohn.
+ *  Copyright (C) 2013 Pawel Piatek.
  *  
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -24,10 +25,9 @@
 #include <libgen.h>
 #include <jack/jack.h>
 #include <jack/jslist.h>
-#include <jack/transport.h>
 #include <jack/session.h>
 
-#define CONNECT_APP "fhctrl_connect"
+#define CONNECT_APP "fhctrl_connect -w 60"
 #define SKIP_MIDI 1
 
 typedef struct {
@@ -74,7 +74,7 @@ void name2uuid ( JSList** uuid_map, char* buf, const char* name, size_t buf_size
 
 	for ( node=*uuid_map; node; node=jack_slist_next(node) ) {
 		uuid_map_t *map = node->data;
-		if ( strcmp( map->name, client_component ) == 0 ) {
+		if ( ! strcmp( map->name, client_component ) ) {
 			snprintf( buf, buf_size, "%s%s", map->uuid, port_component );
 			return;
 		}
@@ -133,11 +133,10 @@ int main(int argc, char *argv[]) {
 	}
 
 	/* Parse save path (Jack need trailing slash */
-	size_t save_path_size = strlen(path) + 1;
-	char save_path[save_path_size];
-	strcpy(save_path, path);
-	char *last = save_path + strlen(save_path) - 1;
-	if (*last != '/') { *(++last) = '/'; *(++last) = '\0'; }
+	size_t plen = strlen(path);
+	char save_path[plen + 2];
+	strncpy(save_path, path, plen + 2);
+	if ( save_path[plen - 1] != '/' ) save_path[plen] = '/';
 
 	/* become a JACK client */
 	if ((client = jack_client_open(package, JackNullOption, NULL)) == 0) {
@@ -173,7 +172,7 @@ int main(int argc, char *argv[]) {
 			/* ncurses aplications */
 			printf( "$XTERM %s &\n", retval[i].command );
 		} else {
-			/* Other aplications */
+			/* other aplications */
 			printf( "%s > \"$LOGDIR/%s.log\" 2>&1 &\n", retval[i].command, retval[i].client_name );
 		}
 		putchar('\n');
@@ -183,7 +182,7 @@ int main(int argc, char *argv[]) {
 
 		int regexp_size = jack_client_name_size() + 4;
 		char port_regexp[regexp_size];
-		snprintf( port_regexp, sizeof(port_regexp), "^%s:.*", retval[i].client_name );
+		snprintf( port_regexp, sizeof port_regexp, "^%s:.*", retval[i].client_name );
 
 		const char **ports = jack_get_ports( client, port_regexp, NULL, 0 );
 		if( !ports ) continue;
@@ -202,9 +201,9 @@ int main(int argc, char *argv[]) {
 			for (k=0; conn[k]; k++) {
 				if ( port_flags & JackPortIsInput ) {
 					store_connection(&connections_list, conn[k], ports[j]);
-				} else { // assume JackPortIsOutput
+				} else if ( port_flags & JackPortIsOutput ) {
 					store_connection(&connections_list, ports[j], conn[k]);
-				}
+				} // otherwise skip port
 			}
 			jack_free (conn);
 		}
@@ -218,9 +217,9 @@ int main(int argc, char *argv[]) {
 	printf("# Connections: %d\n", jack_slist_length(connections_list));
 	for( l=connections_list; l; l=jack_slist_next(l) ) {
 		connection_t *c = l->data;
-		name2uuid( &uuid_map, src, c->src, sizeof(src) );
-		name2uuid( &uuid_map, dst, c->dst, sizeof(dst) );
-		printf( "%s -w 60 -u \"%s\" \"%s\"\n", CONNECT_APP, src, dst );
+		name2uuid( &uuid_map, src, c->src, sizeof src );
+		name2uuid( &uuid_map, dst, c->dst, sizeof dst );
+		printf( "%s -u \"%s\" \"%s\"\n", CONNECT_APP, src, dst );
 		free_connection(c);
 	}
 	jack_session_commands_free(retval);
@@ -230,3 +229,4 @@ int main(int argc, char *argv[]) {
 
 	return exit_code;
 }
+
