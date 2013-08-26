@@ -29,7 +29,6 @@
 #include <jack/jack.h>
 #include <jack/transport.h>
 
-
 char *package;				/* program name */
 int done = 0;
 jack_client_t *client;
@@ -43,6 +42,7 @@ float time_beat_type = 4.0;
 double time_ticks_per_beat = 1920.0;
 double time_beats_per_minute = 120.0;
 volatile int time_reset = 1;		/* true when time values change */
+double tick;				/* we computes in double but pos->tick is int32_t */
 
 /* JACK timebase callback.
  *
@@ -57,7 +57,7 @@ static void timebase(jack_transport_state_t state, jack_nframes_t nframes,
 
 	if (new_pos || time_reset) {
 
-		pos->valid = JackPositionBBT;
+		pos->valid = JackPositionBBT | JackBBTFrameOffset;
 		pos->beats_per_bar = time_beats_per_bar;
 		pos->beat_type = time_beat_type;
 		pos->ticks_per_beat = time_ticks_per_beat;
@@ -70,13 +70,13 @@ static void timebase(jack_transport_state_t state, jack_nframes_t nframes,
 		 * or time signature changes at specific locations in the
 		 * transport timeline. */
 
-		min = pos->frame / ((double) pos->frame_rate * 60.0);
+		min = pos->frame / (pos->frame_rate * 60);
 		abs_tick = min * pos->beats_per_minute * pos->ticks_per_beat;
 		abs_beat = abs_tick / pos->ticks_per_beat;
 
 		pos->bar = abs_beat / pos->beats_per_bar;
 		pos->beat = abs_beat - (pos->bar * pos->beats_per_bar) + 1;
-		pos->tick = abs_tick - (abs_beat * pos->ticks_per_beat);
+		tick = abs_tick - (abs_beat * pos->ticks_per_beat);
 		pos->bar_start_tick = pos->bar * pos->beats_per_bar *
 			pos->ticks_per_beat;
 		pos->bar++;		/* adjust start to bar 1 */
@@ -89,14 +89,12 @@ static void timebase(jack_transport_state_t state, jack_nframes_t nframes,
 #endif
 
 	} else {
-
 		/* Compute BBT info based on previous period. */
-		pos->tick +=
-			nframes * pos->ticks_per_beat * pos->beats_per_minute
+		tick += nframes * pos->ticks_per_beat * pos->beats_per_minute
 			/ (pos->frame_rate * 60);
 
-		while (pos->tick >= pos->ticks_per_beat) {
-			pos->tick -= pos->ticks_per_beat;
+		while (tick >= pos->ticks_per_beat) {
+			tick -= pos->ticks_per_beat;
 			if (++pos->beat > pos->beats_per_bar) {
 				pos->beat = 1;
 				++pos->bar;
@@ -106,6 +104,12 @@ static void timebase(jack_transport_state_t state, jack_nframes_t nframes,
 			}
 		}
 	}
+
+	/* This also floor value when casting double -> int32_t
+		(assume positive values only) */
+	pos->tick = tick;
+	double frac_tick = tick - pos->tick;
+	pos->bbt_offset = frac_tick * nframes;
 }
 
 static void jack_shutdown(void *arg)
