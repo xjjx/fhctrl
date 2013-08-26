@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
 		usage(package);
 	}
 
-	/* Parse save path (Jack need trailing slash */
+	/* Parse save path (Jack need trailing slash) */
 	size_t plen = strlen(path);
 	char save_path[plen + 2];
 	strncpy(save_path, path, plen + 2);
