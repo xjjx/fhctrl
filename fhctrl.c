@@ -635,6 +635,7 @@ void fjack_init( FJACK* fjack ) {
 	jack_ringbuffer_mlock(fjack->buffer_midi_out);
 
 	// Init Jack
+	printf ( "Session UID: %s\n", fjack->session_uuid );
 	fjack->client = jack_client_open (CLIENT_NAME, JackSessionID, NULL, fjack->session_uuid);
 	if ( ! fjack->client ) {
 		fprintf (stderr, "Could not create JACK client.\n");
@@ -677,13 +678,14 @@ void fhctrl_init( FHCTRL* fhctrl ) {
 int main (int argc, char* argv[]) {
 	FHCTRL fhctrl = (FHCTRL) {0};
 	FJACK fjack = (FJACK) {0};
+
+	if (argv[1]) fhctrl.config_file = argv[1];
+	if (argv[2]) fjack.session_uuid = argv[2];
+
 	fjack.user = (void*) &fhctrl;
 	fhctrl.user = (void*) &fjack;
 	fhctrl_init ( &fhctrl );
 	fjack_init ( &fjack );
-
-	if (argv[1]) fhctrl.config_file = argv[1];
-	if (argv[2]) fjack.session_uuid = argv[2];
 
 	clear_log();
 
