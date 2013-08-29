@@ -2,7 +2,7 @@
 
 APP='fhctrl'
 VER='0.7.2'
-DST='/media/bigpig/www/htdocs/kwintesencja'
+DST='/media/bigpig/secure/XJ/sampler/fhctrl'
 PKG="${DST}/${APP}-${VER}.tar.xz"
 
 rm -fr /tmp/${APP}-${VER}

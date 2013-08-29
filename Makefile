@@ -39,4 +39,4 @@ install: all
 	install -Dm755 fhctrl_sn $(DESTDIR)/usr/bin/fhctrl_sn
 	install -Dm755 fhctrl_lsp $(DESTDIR)/usr/bin/fhctrl_lsp
 	install -Dm755 fhctrl_connect $(DESTDIR)/usr/bin/fhctrl_connect
-	install -Dm755 fhctrl_transport $(DESTDIR)/usr/bin/fhctrl_transport
+#	install -Dm755 fhctrl_transport $(DESTDIR)/usr/bin/fhctrl_transport
