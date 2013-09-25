@@ -46,6 +46,7 @@ show_usage (void)
 	fprintf (stderr, "Display options:\n");
 	fprintf (stderr, "        -s, --server <name>   Connect to the jack server named <name>\n");
 	fprintf (stderr, "        -A, --aliases         List aliases for each port\n");
+	fprintf (stderr, "        -e, --regexp <regexp> Match ports by regexp\n");
 	fprintf (stderr, "        -c, --connections     List connections to/from each port\n");
 	fprintf (stderr, "        -l, --latency         Display per-port latency in frames at each port\n");
 	fprintf (stderr, "        -L, --latency         Display total latency in frames at each port\n");
@@ -78,8 +79,8 @@ main (int argc, char *argv[])
 	int option_index;
 	char* aliases[2];
 	char *server_name = NULL;
+	char *match_regexp = NULL;
 
-	
 	struct option long_options[] = {
 	    { "server", 1, 0, 's' },
 		{ "aliases", 0, 0, 'A' },
@@ -91,6 +92,7 @@ main (int argc, char *argv[])
 		{ "uuid", 0, 0, 'u' },
 		{ "help", 0, 0, 'h' },
 		{ "version", 0, 0, 'v' },
+		{ "regexp", 0, 0, 'e' },
 		{ 0, 0, 0, 0 }
 	};
 
@@ -101,13 +103,12 @@ main (int argc, char *argv[])
 		my_name ++;
 	}
 
-	while ((c = getopt_long (argc, argv, "s:AclLphvtu", long_options, &option_index)) >= 0) {
+	while ((c = getopt_long (argc, argv, "s:Ae:clLphvtu", long_options, &option_index)) >= 0) {
 		switch (c) {
 		case 's':
-            server_name = (char *) malloc (sizeof (char) * strlen(optarg));
-            strcpy (server_name, optarg);
-            options |= JackServerName;
-            break;
+			server_name = optarg;
+			options |= JackServerName;
+			break;
 		case 'A':
 			aliases[0] = (char *) malloc (jack_port_name_size());
 			aliases[1] = (char *) malloc (jack_port_name_size());
@@ -124,6 +125,9 @@ main (int argc, char *argv[])
 			break;
 		case 'p':
 			show_properties = 1;
+			break;
+		case 'e':
+			match_regexp = optarg;
 			break;
 		case 't':
 			show_type = 1;
@@ -142,7 +146,6 @@ main (int argc, char *argv[])
 		default:
 			show_usage ();
 			return 1;
-			break;
 		}
 	}
 
@@ -160,7 +163,7 @@ main (int argc, char *argv[])
 		return 1;
 	}
 
-	ports = jack_get_ports (client, NULL, NULL, 0);
+	ports = jack_get_ports (client, match_regexp, NULL, 0);
 
 	for (i = 0; ports && ports[i]; ++i) {
 		// skip over any that don't match ALL of the strings presented at command line
@@ -179,14 +182,16 @@ main (int argc, char *argv[])
 		}
 
 		jack_port_t *port = jack_port_by_name (client, ports[i]);
+		if ( ! port ) {
+			fprintf (stderr, "jack_port_by_name fail on \"%s\".\n", ports[i]);
+			continue;
+		}
 
 		if (show_aliases) {
-			int cnt;
-			int i;
-
-			cnt = jack_port_get_aliases (port, aliases);
-			for (i = 0; i < cnt; ++i) {
-				printf ("   %s\n", aliases[i]);
+			int cnt = jack_port_get_aliases (port, aliases);
+			int a;
+			for (a = 0; a < cnt; ++a) {
+				printf ("   %s\n", aliases[a]);
 			}
 		}
 				
@@ -199,61 +204,49 @@ main (int argc, char *argv[])
 					} else {
 						printf("%s\n", connections[j]);
 					}
-
 				}
 				jack_free (connections);
 			} 
 		}
 		if (show_port_latency) {
-			if (port) {
-				jack_latency_range_t range;
-				printf ("	port latency = %" PRIu32 " frames\n",
-					jack_port_get_latency (port));
+			jack_latency_range_t range;
+			printf ("	port latency = %" PRIu32 " frames\n",
+				jack_port_get_latency (port));
 
-				jack_port_get_latency_range (port, JackPlaybackLatency, &range);
-				printf ("	port playback latency = [ %" PRIu32 " %" PRIu32 " ] frames\n",
-					range.min, range.max);
+			jack_port_get_latency_range (port, JackPlaybackLatency, &range);
+			printf ("	port playback latency = [ %" PRIu32 " %" PRIu32 " ] frames\n",
+				range.min, range.max);
 
-				jack_port_get_latency_range (port, JackCaptureLatency, &range);
-				printf ("	port capture latency = [ %" PRIu32 " %" PRIu32 " ] frames\n",
-					range.min, range.max);
-			}
+			jack_port_get_latency_range (port, JackCaptureLatency, &range);
+			printf ("	port capture latency = [ %" PRIu32 " %" PRIu32 " ] frames\n",
+			range.min, range.max);
 		}
 		if (show_total_latency) {
-			if (port) {
-				printf ("	total latency = %" PRIu32 " frames\n",
-					jack_port_get_total_latency (client, port));
-			}
+			printf ("	total latency = %" PRIu32 " frames\n",
+				jack_port_get_total_latency (client, port));
 		}
 		if (show_properties) {
-			if (port) {
-				int flags = jack_port_flags (port);
-				printf ("	properties: ");
-				if (flags & JackPortIsInput) {
-					fputs ("input,", stdout);
-				}
-				if (flags & JackPortIsOutput) {
-					fputs ("output,", stdout);
-				}
-				if (flags & JackPortCanMonitor) {
-					fputs ("can-monitor,", stdout);
-				}
-				if (flags & JackPortIsPhysical) {
-					fputs ("physical,", stdout);
-				}
-				if (flags & JackPortIsTerminal) {
-					fputs ("terminal,", stdout);
-				}
-				putc ('\n', stdout);
-			}
+			int flags = jack_port_flags (port);
+			printf ("	properties: ");
+			if (flags & JackPortIsInput)
+				fputs ("input,", stdout);
+
+			if (flags & JackPortIsOutput)
+				fputs ("output,", stdout);
+
+			if (flags & JackPortCanMonitor)
+				fputs ("can-monitor,", stdout);
+
+			if (flags & JackPortIsPhysical)
+				fputs ("physical,", stdout);
+
+			if (flags & JackPortIsTerminal)
+				fputs ("terminal,", stdout);
+
+			putc ('\n', stdout);
 		}
-		if (show_type) {
-			if (port) {
-				putc ('\t', stdout);
-				fputs (jack_port_type (port), stdout);
-				putc ('\n', stdout);
-			}
-		}
+		if (show_type)
+			printf ( "\t%s\n", jack_port_type (port) );
 	}
 
 	if (ports)
