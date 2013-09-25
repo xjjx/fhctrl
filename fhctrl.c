@@ -424,12 +424,8 @@ static void get_rt_logs( FJACK* fjack ) {
 	uint8_t len;
 	jack_ringbuffer_t* rbuf = fjack->log_collector;
 	while (jack_ringbuffer_read_space(rbuf)) {
-		jack_ringbuffer_peek( rbuf, (char*) &len, sizeof len);
-		jack_ringbuffer_read_advance( rbuf, sizeof len);
-
-		jack_ringbuffer_peek( rbuf, (char*) &info, len);
-		jack_ringbuffer_read_advance( rbuf, len);
-
+		jack_ringbuffer_read( rbuf, (char*) &len, sizeof len);
+		jack_ringbuffer_read( rbuf, (char*) &info, len);
 		LOG(info);
 	}
 }
@@ -553,8 +549,7 @@ int process (jack_nframes_t frames, void* arg) {
 		jack_ringbuffer_read_advance(j->buffer_midi_out, sizeof size);
 		
 		jack_midi_data_t tmpbuf[size];
-		jack_ringbuffer_peek(j->buffer_midi_out, (char*) &tmpbuf, size);
-		jack_ringbuffer_read_advance(j->buffer_midi_out, size);
+		jack_ringbuffer_read(j->buffer_midi_out, (char*) &tmpbuf, size);
 
 		if (jack_midi_event_write(outbuf, j->buffer_size - 1, (const jack_midi_data_t *) &tmpbuf, size) )
 			collect_rt_logs(j, "SendOur - Write dropped");
