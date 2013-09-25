@@ -620,7 +620,9 @@ void idle_cb( void* arg ) {
 	} else fhctrl->offered_last_choke--;
 }
 
-void fjack_init( FJACK* fjack ) {
+void fjack_init( FJACK* fjack, void* user_ptr ) {
+	fjack->user = user_ptr;
+
 	// Init log collector
 	fjack->log_collector = jack_ringbuffer_create(127 * 50 * sizeof(char));
 	jack_ringbuffer_mlock( fjack->log_collector );
@@ -657,7 +659,8 @@ void fjack_init( FJACK* fjack ) {
 	jack_set_error_function(jack_log);
 }
 
-void fhctrl_init( FHCTRL* fhctrl ) {
+void fhctrl_init( FHCTRL* fhctrl, void* user_ptr ) {
+	fhctrl->user = user_ptr;
 	fhctrl->songs = &fhctrl->song_first;
 
 	/* try on start */
@@ -677,10 +680,8 @@ int main (int argc, char* argv[]) {
 	if (argc > 0) fhctrl.config_file = argv[1];
 	if (argc > 1) fjack.session_uuid = argv[2];
 
-	fhctrl.user = (void*) &fjack;
-	fhctrl_init ( &fhctrl );
-	fjack.user = (void*) &fhctrl;
-	fjack_init ( &fjack );
+	fhctrl_init ( &fhctrl, &fjack );
+	fjack_init ( &fjack, &fhctrl );
 
 	clear_log();
 
