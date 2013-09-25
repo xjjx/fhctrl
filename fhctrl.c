@@ -632,12 +632,18 @@ void fjack_init( FJACK* fjack, void* user_ptr ) {
 	jack_ringbuffer_mlock( fjack->buffer_midi_out );
 
 	// Init Jack
-	printf ( "Session UID: %s\n", fjack->session_uuid );
-	fjack->client = jack_client_open (CLIENT_NAME, JackSessionID, NULL, fjack->session_uuid);
+	if ( fjack->session_uuid ) {
+		printf ( "Session UID: %s\n", fjack->session_uuid );
+		fjack->client = jack_client_open (CLIENT_NAME, JackSessionID, NULL, fjack->session_uuid);
+	} else {
+		fjack->client = jack_client_open (CLIENT_NAME, JackNullOption, NULL);
+	}
+
 	if ( ! fjack->client ) {
 		fprintf (stderr, "Could not create JACK client.\n");
 		exit (EXIT_FAILURE);
 	}
+
 	fjack->buffer_size = jack_get_buffer_size(fjack->client);
 	fjack->sample_rate = jack_get_sample_rate(fjack->client);
 
