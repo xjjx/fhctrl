@@ -627,7 +627,7 @@ void fjack_init( FJACK* fjack ) {
 
 	// Init MIDI Out buffer
 	fjack->buffer_midi_out = jack_ringbuffer_create(127 * SYSEX_MAX_SIZE);
-	jack_ringbuffer_mlock(fjack->buffer_midi_out);
+	jack_ringbuffer_mlock( fjack->buffer_midi_out );
 
 	// Init Jack
 	printf ( "Session UID: %s\n", fjack->session_uuid );
@@ -674,12 +674,12 @@ int main (int argc, char* argv[]) {
 	FHCTRL fhctrl = (FHCTRL) {0};
 	FJACK fjack = (FJACK) {0};
 
-	if (argv[1]) fhctrl.config_file = argv[1];
-	if (argv[2]) fjack.session_uuid = argv[2];
+	if (argc > 0) fhctrl.config_file = argv[1];
+	if (argc > 1) fjack.session_uuid = argv[2];
 
-	fjack.user = (void*) &fhctrl;
 	fhctrl.user = (void*) &fjack;
 	fhctrl_init ( &fhctrl );
+	fjack.user = (void*) &fhctrl;
 	fjack_init ( &fjack );
 
 	clear_log();
