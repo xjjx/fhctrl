@@ -683,8 +683,8 @@ int main (int argc, char* argv[]) {
 	FHCTRL fhctrl = (FHCTRL) {0};
 	FJACK fjack = (FJACK) {0};
 
-	if (argc > 0) fhctrl.config_file = argv[1];
-	if (argc > 1) fjack.session_uuid = argv[2];
+	if (argc > 1) fhctrl.config_file = argv[1];
+	if (argc > 2) fjack.session_uuid = argv[2];
 
 	fhctrl_init ( &fhctrl, &fjack );
 	fjack_init ( &fjack, &fhctrl );
