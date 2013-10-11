@@ -25,7 +25,7 @@ test: test.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack
 
 fhctrl_transport: transport.c
-	$(CC) $(CFLAGS) -o $@ $^ -ljack -lreadline
+	$(CC) $(CFLAGS) -o $@ $^ -ljack -lreadline -lm
 
 inprocess: inprocess.c
 	$(CC) $(CFLAGS) -o $@ $^ -fPIC -shared -ljack
