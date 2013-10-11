@@ -109,7 +109,7 @@ static void timebase(jack_transport_state_t state, jack_nframes_t nframes,
 	double int_tick;
 	double frac_tick = modf ( tick, &int_tick );
 	pos->tick = lrint ( int_tick );
-	pos->bbt_offset = frac_tick * nframes;
+	pos->bbt_offset = lrint ( frac_tick ) * nframes;
 }
 
 static void jack_shutdown(void *arg)
