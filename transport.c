@@ -24,6 +24,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <jack/jack.h>
@@ -70,7 +71,7 @@ static void timebase(jack_transport_state_t state, jack_nframes_t nframes,
 		 * or time signature changes at specific locations in the
 		 * transport timeline. */
 
-		min = pos->frame / (pos->frame_rate * 60);
+		min = pos->frame / ((double) pos->frame_rate * 60.0);
 		abs_tick = min * pos->beats_per_minute * pos->ticks_per_beat;
 		abs_beat = abs_tick / pos->ticks_per_beat;
 
@@ -105,10 +106,9 @@ static void timebase(jack_transport_state_t state, jack_nframes_t nframes,
 		}
 	}
 
-	/* This also floor value when casting double -> int32_t
-		(assume positive values only) */
-	pos->tick = tick;
-	double frac_tick = tick - pos->tick;
+	double int_tick;
+	double frac_tick = modf ( tick, &int_tick );
+	pos->tick = lrint ( int_tick );
 	pos->bbt_offset = frac_tick * nframes;
 }
 
