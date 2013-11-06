@@ -37,6 +37,7 @@ void LOG(char *fmt, ...) {
 	fputc ( '\n', f );
 	fclose( f );
 
+	/* Send message to defined user callback ( e.g. nLOG ) */
 	if (logcallback) {
 		char msg[256];
 		va_start ( args, fmt );
