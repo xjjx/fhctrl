@@ -18,6 +18,7 @@
 #include <jack/ringbuffer.h>
 
 #include "basics.h"
+#include "fjack.h"
 #include "sysex.h"
 #include "fhctrl.h"
 #include "log.h"
@@ -25,48 +26,13 @@
 #include "ftdilcd.h"
 
 #define CTRL_CHANNEL 15
-#define CLIENT_NAME "FHControl"
+#define APP_NAME "FHControl"
 
 // Config file support
 bool dump_state( FHCTRL* fhctrl );
 bool load_state( FHCTRL* fhctrl );
 
-typedef struct _FJACK {
-	jack_client_t*		client;
-	jack_port_t*		in;
-	jack_port_t*		out;
-	jack_port_t*		fin;
-	jack_port_t*		fout;
-	jack_nframes_t		buffer_size;
-	jack_nframes_t		sample_rate;
-	jack_session_event_t*	session_event;
-	const char*		session_uuid;
-	bool			need_ses_reply;
-	jack_ringbuffer_t*	log_collector;
-	jack_ringbuffer_t*	buffer_midi_out;
-	void*			user;
-} FJACK;
-
-/* Declarations */
-static void collect_rt_logs(FJACK* fjack, char *fmt, ...);
-
 /* Functions */
-void jack_log(const char *msg) { LOG((char*) msg); }
-void jack_log_silent(const char *msg) { return; }
-
-bool queue_midi_out(jack_ringbuffer_t* rbuf, jack_midi_data_t* data, size_t size, const char* What, int8_t id) {
-	if (jack_ringbuffer_write_space(rbuf) < size + sizeof(size)) {
-		LOG("%s - No space in MIDI OUT buffer (ID:%d)", What, id);
-		return false;
-	} else {
-		// Size of message
-		jack_ringbuffer_write(rbuf, (char*) &size, sizeof size);
-		// Message itself
-		jack_ringbuffer_write(rbuf, (char*) data, size);
-		return true;
-	}
-}
-
 void send_ident_request( FHCTRL* fhctrl ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
@@ -98,7 +64,8 @@ void send_dump_request( FHCTRL* fhctrl , short id ) {
 	);
 }
 
-void inline send_offer(FHCTRL* fhctrl, SysExIdentReply* r) {
+static void inline
+send_offer ( FHCTRL* fhctrl, SysExIdentReply* r ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
 	SysExIdOffer sysex_offer = SYSEX_OFFER;
@@ -189,19 +156,19 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 	}
 }
 
-void init_lcd( struct LCDScreen* lcd_screen ) {
+static void init_lcd( struct LCDScreen* lcd_screen ) {
 	lcd_screen->available = lcd_init();
 	if (! lcd_screen->available) return;
 
 	char lcdline[16];
-	snprintf(lcdline, 16, "%s", CLIENT_NAME);
+	snprintf(lcdline, 16, "%s", APP_NAME);
 	lcd_text(0,0,lcdline);
 	snprintf(lcdline, 16, "says HELLO");
 	lcd_text(0,1,lcdline);
 	lcd_screen->fst = NULL;
 }
 
-void update_lcd( struct LCDScreen* lcd_screen ) {
+static void update_lcd( struct LCDScreen* lcd_screen ) {
 	if (! lcd_screen->available) return;
 
 	FSTPlug* fp = lcd_screen->fst;
@@ -221,8 +188,8 @@ void update_lcd( struct LCDScreen* lcd_screen ) {
 
 static inline void
 lcd_set_current_fst ( struct LCDScreen* lcd_screen, FSTPlug* fp ) {
-	if ( lcd_screen->available )
-		lcd_screen->fst = fp;
+	if ( ! lcd_screen->available ) return;
+	lcd_screen->fst = fp;
 }
 
 static void fjack_session_reply ( FJACK* fjack ) {
@@ -251,27 +218,6 @@ static void fjack_session_reply ( FJACK* fjack ) {
 	jack_session_event_free(sev);
 }
 
-static void connect_to_physical( FJACK* j ) {
-	const char **jports;
-	jports = jack_get_ports(j->client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
-	if (! jports) return;
-	
-	const char *pname = jack_port_name( j->fin );
-	int i;
-	for (i=0; jports[i]; i++) {
-		if (jack_port_connected_to(j->fin, jports[i])) continue;
-		jack_connect(j->client, jports[i], pname);
-		LOG("%s -> %s\n", pname, jports[i]);
-	}
-	jack_free(jports);
-}
-
-void session_callback_handler (jack_session_event_t *event, void* arg) {
-	FJACK* fjack = (FJACK*) arg;
-	fjack->session_event = event;
-	fjack->need_ses_reply = true;
-}
-
 int graph_order_callback_handler ( void *arg ) {
 	FJACK* fjack =(FJACK*) arg;
 	FHCTRL* fhctrl = (FHCTRL*) fjack->user;
@@ -290,38 +236,6 @@ void registration_handler(jack_port_id_t port_id, int reg, void *arg) {
 int cpu_load( FHCTRL* fhctrl ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 	return (int) jack_cpu_load(fjack->client);
-}
-
-static void get_rt_logs( FJACK* fjack ) {
-	char info[50];
-	uint8_t len;
-	jack_ringbuffer_t* rbuf = fjack->log_collector;
-	while (jack_ringbuffer_read_space(rbuf)) {
-		jack_ringbuffer_read( rbuf, (char*) &len, sizeof len);
-		jack_ringbuffer_read( rbuf, (char*) &info, len);
-		LOG(info);
-	}
-}
-
-static void collect_rt_logs(FJACK* fjack, char *fmt, ...) {
-	char info[50];
-	va_list args;
-
-	va_start(args, fmt);
-	vsnprintf(info, sizeof(info), fmt, args);
-	va_end(args);
-
-	uint8_t len = strlen(info) + 1;
-
-	jack_ringbuffer_t* rbuf = fjack->log_collector;
-	if (jack_ringbuffer_write_space(rbuf) < len + sizeof len) {
-		LOG("No space in log collector");
-	} else {
-		// Size of message
-		jack_ringbuffer_write(rbuf, (char*) &len, sizeof len);
-		// Message itself
-		jack_ringbuffer_write(rbuf, (char*) &info, len);
-	}
 }
 
 // Midi control channel handling - true if handled
@@ -523,51 +437,6 @@ void fhctrl_idle ( FHCTRL* fhctrl ) {
 	} else fhctrl->offered_last_choke--;
 }
 
-void fjack_init ( FJACK* fjack, void* user_ptr ) {
-	fjack->user = user_ptr;
-
-	// Init log collector
-	fjack->log_collector = jack_ringbuffer_create(127 * 50 * sizeof(char));
-	jack_ringbuffer_mlock( fjack->log_collector );
-
-	// Init MIDI Out buffer
-	fjack->buffer_midi_out = jack_ringbuffer_create(127 * SYSEX_MAX_SIZE);
-	jack_ringbuffer_mlock( fjack->buffer_midi_out );
-
-	// Init Jack
-	if ( fjack->session_uuid ) {
-		printf ( "Session UID: %s\n", fjack->session_uuid );
-		fjack->client = jack_client_open (CLIENT_NAME, JackSessionID, NULL, fjack->session_uuid);
-	} else {
-		fjack->client = jack_client_open (CLIENT_NAME, JackNullOption, NULL);
-	}
-
-	if ( ! fjack->client ) {
-		fprintf (stderr, "Could not create JACK client.\n");
-		exit (EXIT_FAILURE);
-	}
-
-	fjack->buffer_size = jack_get_buffer_size(fjack->client);
-	fjack->sample_rate = jack_get_sample_rate(fjack->client);
-
-	fjack->in = jack_port_register (fjack->client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	fjack->fin = jack_port_register (fjack->client, "forward_input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	fjack->out = jack_port_register (fjack->client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
-	fjack->fout = jack_port_register (fjack->client, "forward_output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
-
-	jack_set_process_callback(fjack->client, process, fjack);
-	jack_set_session_callback(fjack->client, session_callback_handler, fjack);
-	jack_set_port_registration_callback(fjack->client, registration_handler, fjack);
-	jack_set_graph_order_callback(fjack->client, graph_order_callback_handler, fjack);
-//	jack_set_port_connect_callback(j->client, connect_callback_handler, fjack);
-	if ( jack_activate (fjack->client) != 0 ) {
-		fprintf (stderr, "Could not activate client.\n");
-		exit (EXIT_FAILURE);
-	}
-	jack_set_info_function(jack_log_silent);
-	jack_set_error_function(jack_log);
-}
-
 void fhctrl_init( FHCTRL* fhctrl, void* user_ptr ) {
 	fhctrl->user = user_ptr;
 	fhctrl->songs = &fhctrl->song_first;
@@ -587,7 +456,7 @@ int main (int argc, char* argv[]) {
 	if (argc > 2) fjack.session_uuid = argv[2];
 
 	fhctrl_init ( &fhctrl, &fjack );
-	fjack_init ( &fjack, &fhctrl );
+	fjack_init ( &fjack, APP_NAME, &fhctrl );
 
 	clear_log();
 

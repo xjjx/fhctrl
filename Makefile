@@ -17,7 +17,7 @@ BINDIR = usr/bin
 
 all: fhctrl sn lsp connect
 
-$(APP): src/nfhc.c src/config.c src/ftdilcd.c src/basics.c src/fhctrl.c src/log.c
+$(APP): src/nfhc.c src/config.c src/ftdilcd.c src/basics.c src/fjack.c src/fhctrl.c src/log.c
 	$(CC) $(CFLAGS_APP) -o $@ $^ $(LIBRARIES)
 	
 sn: tools/session_notify.c
