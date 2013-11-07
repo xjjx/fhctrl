@@ -10,6 +10,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "sysex.h"
+
 enum State {
 	FST_STATE_BYPASS = 0,
 	FST_STATE_ACTIVE = 1,
@@ -46,6 +48,8 @@ void fst_new ( FSTPlug** fst, Song** songs, uint8_t uuid );
 uint8_t fst_uniqe_id ( FSTPlug** fst, uint8_t start );
 FSTPlug* fst_get ( FSTPlug** fst, Song** songs, uint8_t uuid );
 FSTPlug* fst_next ( FSTPlug** fst, FSTPlug* prev );
+void fst_set_sysex ( FSTPlug* fp, SysExDumpV1* sysex );
+bool fst_is_any_na ( FSTPlug** fst );
 /****************** SONG ****************************************/
 Song* song_new(Song** songs, FSTPlug** fst);
 Song* song_get(Song** songs, short SongNumber);

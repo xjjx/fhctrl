@@ -94,14 +94,8 @@ void send_ident_request( FHCTRL* fhctrl ) {
 // Send SysEx Ident request if found some N/A units
 // NOTE: don't trigger for non-sysex units
 static void detect_na( FHCTRL* fhctrl ) {
-	uint8_t i;
-	for(i=0; i < 128; i++) {
-		FSTPlug* fp = fhctrl->fst[i];
-		if(fp && fp->type != FST_TYPE_DEVICE && fp->state->state == FST_NA) {
-			send_ident_request( fhctrl );
-			return;
-		}
-	}
+	if ( fst_is_any_na ( fhctrl->fst ) )
+		send_ident_request ( fhctrl );
 }
 
 void send_dump_request( FHCTRL* fhctrl , short id ) {
@@ -147,18 +141,9 @@ void inline send_offer(FHCTRL* fhctrl, SysExIdentReply* r) {
 
 void fst_send(FHCTRL* fhctrl, FSTPlug* fp) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
-	FSTState* fs = fp->state;
 
 	SysExDumpV1 sysex_dump = SYSEX_DUMP;
-	sysex_dump.uuid = fp->id;
-	sysex_dump.program = fs->program;
-	sysex_dump.channel = fs->channel;
-	sysex_dump.volume = fs->volume;
-	sysex_dump.state = fs->state;
-		
-	/* NOTE: FSTHost ignore incoming strings anyway */
-	memcpy(sysex_dump.program_name, fs->program_name, sizeof(sysex_dump.program_name));
-	memcpy(sysex_dump.plugin_name, fp->name, sizeof(sysex_dump.plugin_name));
+	fst_set_sysex ( fp, &sysex_dump );
 
 	queue_midi_out(
 		fjack->buffer_midi_out,

@@ -63,6 +63,33 @@ FSTPlug* fst_next ( FSTPlug** fst, FSTPlug* prev ) {
 	return NULL;
 }
 
+void fst_set_sysex ( FSTPlug* fp, SysExDumpV1* sysex ) {
+	FSTState* fs = fp->state;
+
+        sysex->uuid = fp->id;
+        sysex->program = fs->program;
+        sysex->channel = fs->channel;
+        sysex->volume = fs->volume;
+        sysex->state = fs->state;
+                
+        /* NOTE: FSTHost ignore incoming strings anyway */
+        memcpy(sysex->program_name, fs->program_name, sizeof(sysex->program_name));
+        memcpy(sysex->plugin_name, fp->name, sizeof(sysex->plugin_name));
+}
+
+bool fst_is_any_na ( FSTPlug** fst ) {
+	uint8_t i;
+	for(i=0; i < 128; i++) {
+		FSTPlug* fp = fst[i];
+		if ( ! fp ) continue;
+
+		if ( fp->type != FST_TYPE_DEVICE && 
+		     fp->state->state == FST_NA
+		) return true;
+	}
+	return false;
+}
+
 /****************** SONG ****************************************/
 Song* song_new ( Song** songs, FSTPlug** fst) {
 	uint8_t i;
