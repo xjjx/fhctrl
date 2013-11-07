@@ -95,6 +95,15 @@ FSTPlug* fst_get_from_sysex ( FSTPlug** fst, Song** songs, SysExDumpV1* sysex ) 
 	return fp;
 }
 
+void fst_reset_to_na ( FSTPlug** fst ) {
+	uint8_t i;
+	for ( i=0; i < 128; i++ ) {
+		// NOTE: non-sysex devices doesn't handle IdentRequest
+		if (fst[i] && fst[i]->type != FST_TYPE_DEVICE)
+			fst[i]->state->state = FST_NA;
+	}
+}
+
 bool fst_is_any_na ( FSTPlug** fst ) {
 	uint8_t i;
 	for(i=0; i < 128; i++) {

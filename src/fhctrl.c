@@ -70,14 +70,7 @@ bool queue_midi_out(jack_ringbuffer_t* rbuf, jack_midi_data_t* data, size_t size
 void send_ident_request( FHCTRL* fhctrl ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
-	// Reset states to non-active
-	// NOTE: non-sysex devices doesn't handle IdentRequest
-	uint8_t i;
-	FSTPlug** fst = fhctrl->fst;
-	for(i=0; i < 128; i++) {
-		if (fst[i] && fst[i]->type != FST_TYPE_DEVICE)
-			fst[i]->state->state = FST_NA;
-	}
+	fst_reset_to_na ( fhctrl->fst );
 
 	LOG("Send ident request");
 	SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;

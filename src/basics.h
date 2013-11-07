@@ -51,6 +51,7 @@ FSTPlug* fst_next ( FSTPlug** fst, FSTPlug* prev );
 void fst_set_sysex ( FSTPlug* fp, SysExDumpV1* sysex );
 FSTPlug* fst_get_from_sysex ( FSTPlug** fst, Song** songs, SysExDumpV1* sysex );
 bool fst_is_any_na ( FSTPlug** fst );
+void fst_reset_to_na ( FSTPlug** fst );
 /****************** SONG ****************************************/
 Song* song_new(Song** songs, FSTPlug** fst);
 Song* song_get(Song** songs, short SongNumber);
