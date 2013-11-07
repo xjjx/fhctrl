@@ -342,84 +342,21 @@ inline bool ctrl_channel_handling ( FHCTRL* fhctrl, jack_midi_data_t data[] ) {
 	return true;
 }
 
-int process (jack_nframes_t frames, void* arg) {
-	FJACK* j = (FJACK*) arg;
-	FHCTRL* fhctrl = (FHCTRL*) j->user;
-
-	jack_nframes_t i, count;
-
-	void* inbuf = jack_port_get_buffer (j->in, frames);
-	assert (inbuf);
-
+static inline void
+fjack_out_port_handling ( FJACK* j, jack_nframes_t frames ) {
 	void* outbuf = jack_port_get_buffer(j->out, frames);
 	assert (outbuf);
 	jack_midi_clear_buffer(outbuf);
 
-	count = jack_midi_get_event_count (inbuf);
-	for (i = 0; i < count; ++i) {
-		jack_midi_event_t event;
-		if (jack_midi_event_get (&event, inbuf, i) != 0) break;
-
-//		collect_rt_logs(j, "MIDI: %X", event.buffer[0]);
-
-		if ( ctrl_channel_handling ( fhctrl, event.buffer ) ) continue;
-
-		if ( event.size < 5 || event.buffer[0] != SYSEX_BEGIN ) continue;
-		fhctrl->gui.sysex_midi_in = true;
-
-		switch (event.buffer[1]) {
-		case SYSEX_NON_REALTIME:
-			// event.buffer[2] is target_id - in our case always 7F
-			if ( event.buffer[3] != SYSEX_GENERAL_INFORMATION ||
-				event.buffer[4] != SYSEX_IDENTITY_REPLY
-			) continue;
-
-			SysExIdentReply* r = (SysExIdentReply*) event.buffer;
-			collect_rt_logs(j, "Got SysEx ID Reply ID %X : %X", r->id, r->model[0]);
-			// If this is FSTPlug then try to deal with him ;-)
-			if (r->id == SYSEX_MYID) {
-				if (r->model[0] == 0) {
-					send_offer(fhctrl, r);
-				} else {
-					// Note: we refresh GUI when dump back to us
-					FSTPlug* fp = fst_get ( fhctrl->fst, fhctrl->songs, r->model[0] );
-					fp->type = FST_TYPE_PLUGIN; // We just know this ;-)
-					send_dump_request (fhctrl, fp->id);
-				}
-			} /* else { Regular device - not supported yet } */
-			break;
-		case SYSEX_MYID:
-			if (event.size < sizeof(SysExDumpV1)) continue;
-
-			SysExDumpV1* sysex = (SysExDumpV1*) event.buffer;
-			if (sysex->type != SYSEX_TYPE_DUMP) continue;
-
-			collect_rt_logs(j, "Got SysEx Dump %X : %s : %s", sysex->uuid, sysex->plugin_name, sysex->program_name);
-
-			/* Dump from address zero is fail - try fix this sending ident req */
-			if (sysex->uuid == 0) {
-				send_ident_request( fhctrl );
-				continue;
-			}
-
-			/* This also create new FSTPlug if needed */
-			/* FIXME: this use fst_new which use calloc */
-			FSTPlug* fp = fst_get_from_sysex ( fhctrl->fst, fhctrl->songs, sysex );
-
-			lcd_set_current_fst ( &fhctrl->lcd_screen, fp );
-
-			break;
-		}
-	}
-
-	/* Send our queued messages */
-	while (jack_ringbuffer_read_space(j->buffer_midi_out)) {
+	while ( jack_ringbuffer_read_space(j->buffer_midi_out) ) {
 		size_t size;
 		jack_ringbuffer_peek(j->buffer_midi_out, (char*) &size, sizeof size);
+
 		if ( size > jack_midi_max_event_size(outbuf) ) {
 			collect_rt_logs(j, "No more space in midi buffer");
 			break;
 		}
+
 		jack_ringbuffer_read_advance(j->buffer_midi_out, sizeof size);
 		
 		jack_midi_data_t tmpbuf[size];
@@ -428,15 +365,20 @@ int process (jack_nframes_t frames, void* arg) {
 		if (jack_midi_event_write(outbuf, j->buffer_size - 1, (const jack_midi_data_t *) &tmpbuf, size) )
 			collect_rt_logs(j, "SendOur - Write dropped");
 	}
+}
 
-	/* Forward port handling */
-	inbuf = jack_port_get_buffer (j->fin, frames);
+static inline void
+fjack_forward_port_handling ( FJACK* j, jack_nframes_t frames ) {
+	FHCTRL* fhctrl = (FHCTRL*) j->user;
+
+	void* inbuf = jack_port_get_buffer (j->fin, frames);
 	assert (inbuf);
 
-	outbuf = jack_port_get_buffer(j->fout, frames);
+	void* outbuf = jack_port_get_buffer(j->fout, frames);
 	assert (outbuf);
 	jack_midi_clear_buffer(outbuf);
 
+	jack_nframes_t i, count;
 	count = jack_midi_get_event_count (inbuf);
 	for (i = 0; i < count; ++i) {
 		jack_midi_event_t event;
@@ -453,6 +395,94 @@ int process (jack_nframes_t frames, void* arg) {
 			break;
 		}
 	}
+}
+
+static inline void
+fhctrl_handle_ident_reply ( FHCTRL* fhctrl, SysExIdentReply* r ) {
+	// If this is FSTPlug then try to deal with him ;-)
+	if ( r->id == SYSEX_MYID ) {
+		if ( r->model[0] == 0 ) {
+			send_offer ( fhctrl, r );
+		} else {
+			// Note: we refresh GUI when dump back to us
+			FSTPlug* fp = fst_get ( fhctrl->fst, fhctrl->songs, r->model[0] );
+			fp->type = FST_TYPE_PLUGIN; // We just know this ;-)
+			send_dump_request (fhctrl, fp->id);
+		}
+	} /* else { Regular device - not supported yet } */
+}
+
+static inline void
+fhctrl_handle_sysex_dump ( FHCTRL* fhctrl, SysExDumpV1* sysex ) {
+	/* Dump from address zero mean unknown device - try fix this sending ident req */
+	if (sysex->uuid == 0) {
+		send_ident_request( fhctrl );
+		return;
+	}
+
+	/* This also create new FSTPlug if needed */
+	/* FIXME: this use fst_new which use calloc */
+	FSTPlug* fp = fst_get_from_sysex ( fhctrl->fst, fhctrl->songs, sysex );
+
+	lcd_set_current_fst ( &fhctrl->lcd_screen, fp );
+}
+
+static inline void
+fjack_in_port_handling ( FJACK* j, jack_nframes_t frames ) {
+	FHCTRL* fhctrl = (FHCTRL*) j->user;
+
+	void* inbuf = jack_port_get_buffer (j->in, frames);
+	assert (inbuf);
+
+	jack_nframes_t i, count;
+	count = jack_midi_get_event_count (inbuf);
+	for (i = 0; i < count; ++i) {
+		jack_midi_event_t event;
+		if (jack_midi_event_get (&event, inbuf, i) != 0) break;
+
+//		collect_rt_logs(j, "MIDI: %X", event.buffer[0]);
+
+		if ( ctrl_channel_handling ( fhctrl, event.buffer ) ) continue;
+
+		/* Is this sysex message ? */
+		if ( event.size < 5 || event.buffer[0] != SYSEX_BEGIN ) continue;
+		fhctrl->gui.sysex_midi_in = true;
+
+		switch (event.buffer[1]) {
+		case SYSEX_NON_REALTIME:
+			// event.buffer[2] is target_id - in our case always 7F
+			if ( event.buffer[3] == SYSEX_GENERAL_INFORMATION &&
+			     event.buffer[4] == SYSEX_IDENTITY_REPLY
+			) {
+				SysExIdentReply* r = (SysExIdentReply*) event.buffer;
+				collect_rt_logs(j, "Got SysEx ID Reply ID %X : %X", r->id, r->model[0]);
+				fhctrl_handle_ident_reply ( fhctrl, r );
+			}
+			break;
+		case SYSEX_MYID:
+			if (event.size < sizeof(SysExDumpV1)) continue;
+
+			SysExDumpV1* sysex = (SysExDumpV1*) event.buffer;
+			if ( sysex->type == SYSEX_TYPE_DUMP ) {
+				collect_rt_logs(j, "Got SysEx Dump %X : %s : %s", sysex->uuid, sysex->plugin_name, sysex->program_name);
+				fhctrl_handle_sysex_dump ( fhctrl, sysex );
+			}
+			break;
+		}
+	}
+}
+
+int process (jack_nframes_t frames, void* arg) {
+	FJACK* fjack = (FJACK*) arg;
+
+	/* Read input */
+	fjack_out_port_handling ( fjack, frames );
+
+	/* Send our queued messages */
+	fjack_out_port_handling ( fjack, frames );
+
+	/* Forward port handling */
+	fjack_forward_port_handling ( fjack, frames );
 
 	return 0;
 }
