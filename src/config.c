@@ -5,7 +5,7 @@
 #include "fhctrl.h"
 #include "log.h"
 
-bool dump_state( FHCTRL* fhctrl ) {
+bool dump_state( FHCTRL* fhctrl, const char* config_file ) {
 	short i, j, sn = 0;
 	int ret;
 	char name[24];
@@ -52,19 +52,19 @@ bool dump_state( FHCTRL* fhctrl ) {
 		}
 	}
 
-	ret = config_write_file(&cfg, fhctrl->config_file);
+	ret = config_write_file(&cfg, config_file);
 	config_destroy(&cfg);
 
 	if (ret == CONFIG_TRUE) {
-		LOG("Save to %s OK", fhctrl->config_file);
+		LOG("Save to %s OK", config_file);
 		return true;
 	} else {
-		LOG("Save to %s Fail", fhctrl->config_file);
+		LOG("Save to %s Fail", config_file);
 		return false;
 	}
 }
 
-bool load_state( FHCTRL* fhctrl ) {
+bool load_state( FHCTRL* fhctrl, const char* config_file ) {
 	FSTPlug* f;
 	FSTState* fs;
 	Song* song;
@@ -77,7 +77,7 @@ bool load_state( FHCTRL* fhctrl ) {
 	unsigned short id, i, s;
 
 	config_init(&cfg);
-	if (!config_read_file(&cfg, fhctrl->config_file)) {
+	if (!config_read_file(&cfg, config_file)) {
 		LOG("%s:%d - %s",
 			fhctrl->config_file,
 			config_error_line(&cfg),

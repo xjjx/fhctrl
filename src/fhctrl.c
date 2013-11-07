@@ -29,8 +29,8 @@
 #define APP_NAME "FHControl"
 
 // Config file support
-bool dump_state( FHCTRL* fhctrl );
-bool load_state( FHCTRL* fhctrl );
+bool dump_state( FHCTRL* fhctrl, const char* config_file );
+bool load_state( FHCTRL* fhctrl, const char* config_file );
 
 /* Functions */
 void send_ident_request ( FHCTRL* fhctrl ) {
@@ -166,12 +166,13 @@ static void fjack_session_reply ( FJACK* fjack ) {
 
 	FHCTRL* fhctrl = (FHCTRL*) fjack->user;
 	// Save state, set error if fail
-	// FIXME: you see this , right ?
-	//char filename[FILENAME_MAX];
-	//snprintf (filename, sizeof filename, "%sstate.cfg", sev->session_dir);
+	char filename[FILENAME_MAX];
+	snprintf (filename, sizeof filename, "%sstate.cfg", sev->session_dir);
+
+	//FIXME: update config file ?
 	//fhctrl->config_file = filename;
 
-	if ( ! dump_state ( fhctrl ) )
+	if ( ! dump_state ( fhctrl, filename ) )
 		sev->flags |= JackSessionSaveError;
 
 	jack_session_reply ( fjack->client, sev );
@@ -293,7 +294,7 @@ fhctrl_handle_sysex_dump ( FHCTRL* fhctrl, SysExDumpV1* sysex ) {
 	}
 
 	/* This also create new FSTPlug if needed */
-	/* FIXME: this use fst_new which use calloc */
+	/* FIXME: this use fst_new which can use calloc for new units */
 	FSTPlug* fp = fst_get_from_sysex ( fhctrl->fst, fhctrl->songs, sysex );
 
 	lcd_set_current_fst ( &fhctrl->lcd_screen, fp );
@@ -360,7 +361,8 @@ int process (jack_nframes_t frames, void* arg) {
 }
 
 void update_config (FHCTRL* fhctrl) {
-	if (fhctrl->config_file) dump_state ( fhctrl );
+	if (fhctrl->config_file)
+		dump_state ( fhctrl, fhctrl->config_file );
 }
 
 // Will be called from nfhc
@@ -432,7 +434,7 @@ int main (int argc, char* argv[]) {
 	init_lcd( &fhctrl.lcd_screen );
 
 	// Try read file
-	if (fhctrl.config_file) load_state( &fhctrl );
+	if (fhctrl.config_file) load_state( &fhctrl, fhctrl.config_file );
 
 	// ncurses GUI loop
 	nfhc(&fhctrl);
