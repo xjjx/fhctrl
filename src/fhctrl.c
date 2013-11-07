@@ -157,24 +157,26 @@ lcd_set_current_fst ( struct LCDScreen* lcd_screen, FSTPlug* fp ) {
 static void fjack_session_reply ( FJACK* fjack ) {
 	LOG("session callback");
 
-	FHCTRL* fhctrl = (FHCTRL*) fjack->user;
-
-	char *restore_cmd = malloc(256);
-	char filename[FILENAME_MAX];
 	jack_session_event_t* sev = fjack->session_event;
-
-	// Save state, set error if fail
-	snprintf(filename, sizeof(filename), "%sstate.cfg", sev->session_dir);
-	if ( ! dump_state( fhctrl ) )
-		sev->flags |= JackSessionSaveError;
-
 	sev->flags |= JackSessionNeedTerminal;
 
+	char *restore_cmd = malloc(256);
 	snprintf(restore_cmd, 256, "fhctrl \"${SESSION_DIR}state.cfg\" %s", sev->client_uuid);
 	sev->command_line = restore_cmd;
 
-	jack_session_reply( fjack->client, sev );
+	FHCTRL* fhctrl = (FHCTRL*) fjack->user;
+	// Save state, set error if fail
+	// FIXME: you see this , right ?
+	//char filename[FILENAME_MAX];
+	//snprintf (filename, sizeof filename, "%sstate.cfg", sev->session_dir);
+	//fhctrl->config_file = filename;
 
+	if ( ! dump_state ( fhctrl ) )
+		sev->flags |= JackSessionSaveError;
+
+	jack_session_reply ( fjack->client, sev );
+
+	// TODO: quit on jack request
 //	if (event->type == JackSessionSaveAndQuit)
 
 	jack_session_event_free(sev);
