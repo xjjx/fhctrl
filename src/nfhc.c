@@ -195,8 +195,8 @@ static int edit_selector(CDKSCREEN *cdkscreen, FHCTRL* fhctrl) {
 
 	*fp->state = *fs;
 
-	fst_send(fhctrl, fp);
-	send_dump_request(fhctrl, fp->id);
+	fhctrl_fst_send ( fhctrl, fp, "GUI" );
+	send_dump_request ( fhctrl, fp->id );
 
 	return 1;
 }
@@ -345,8 +345,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 			update_selector(&selector[i], fp);
 		}
 
-		if (fhctrl->idle_cb) fhctrl->idle_cb( fhctrl );
-
+		fhctrl_idle ( fhctrl );
 
 		handle_light ( midi_light, &fhctrl->gui.midi_in, &midi_in_state );
 		handle_light ( ctrl_light, &fhctrl->gui.ctrl_midi_in, &ctrl_midi_in_state );
@@ -372,7 +371,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 		 	case 's': // Set Song
 				setCDKScrollHighlight(song_list, A_REVERSE);
 				tm = activateCDKScroll(song_list, NULL);
-				song_send(fhctrl, tm);
+				fhctrl_song_send (fhctrl, tm);
 				setCDKScrollHighlight(song_list, A_NORMAL);
 				break;
 			case 'u': // Update Song

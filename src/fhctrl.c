@@ -49,7 +49,6 @@ typedef struct _FJACK {
 
 /* Declarations */
 static void collect_rt_logs(FJACK* fjack, char *fmt, ...);
-void idle_cb( void* arg );
 
 /* Functions */
 void jack_log(const char *msg) { LOG((char*) msg); }
@@ -91,13 +90,6 @@ void send_ident_request( FHCTRL* fhctrl ) {
 	);
 }
 
-// Send SysEx Ident request if found some N/A units
-// NOTE: don't trigger for non-sysex units
-static void detect_na( FHCTRL* fhctrl ) {
-	if ( fst_is_any_na ( fhctrl->fst ) )
-		send_ident_request ( fhctrl );
-}
-
 void send_dump_request( FHCTRL* fhctrl , short id ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
@@ -123,13 +115,12 @@ void inline send_offer(FHCTRL* fhctrl, SysExIdentReply* r) {
 	fhctrl->offered_last_choke = 10;
 
 	memcpy(sysex_offer.rnid, r->version, sizeof(sysex_offer.rnid));
-	collect_rt_logs( fjack, "Send Offer %d for %X %X %X %X", sysex_offer.uuid,
-		sysex_offer.rnid[0],
-		sysex_offer.rnid[1],
-		sysex_offer.rnid[2],
-		sysex_offer.rnid[3]
-	);
 	fhctrl->offered_last = sysex_offer.uuid;
+
+	collect_rt_logs( fjack, "Send Offer %d for %X %X %X %X", sysex_offer.uuid,
+		sysex_offer.rnid[0], sysex_offer.rnid[1], sysex_offer.rnid[2], sysex_offer.rnid[3]
+	);
+
 	queue_midi_out(
 		fjack->buffer_midi_out,
 		(jack_midi_data_t*) &sysex_offer,
@@ -139,63 +130,68 @@ void inline send_offer(FHCTRL* fhctrl, SysExIdentReply* r) {
 	);
 }
 
-void fst_send(FHCTRL* fhctrl, FSTPlug* fp) {
+void fhctrl_fst_send ( FHCTRL* fhctrl, FSTPlug* fp, const char* logFuncName ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
-	SysExDumpV1 sysex_dump = SYSEX_DUMP;
-	fst_set_sysex ( fp, &sysex_dump );
+	jack_midi_data_t pc[2];
+	SysExDumpV1 sysex = SYSEX_DUMP;
+	jack_midi_data_t* data = NULL;
+	size_t data_size = 0;
 
-	queue_midi_out(
-		fjack->buffer_midi_out,
-		(jack_midi_data_t*) &sysex_dump,
-		sizeof(SysExDumpV1),
-		"SendSong",
-		fp->id
-	);
+	switch ( fp->type ) {
+	case FST_TYPE_DEVICE:
+		// For devices just send ProgramChange
+		pc[0] = ( fp->state->channel - 1 ) & 0x0F;
+		pc[0] |= 0xC0;
+		pc[1] = fp->state->program & 0x0F;
+		data = (jack_midi_data_t*) &pc;
+		data_size = sizeof pc;
+		break;
+	case FST_TYPE_PLUGIN:
+		// If unit is NA then keep it state and skip sending
+		fst_set_sysex ( fp, &sysex );
+		data = (jack_midi_data_t*) &sysex;
+		data_size = sizeof(SysExDumpV1);
+		break;
+	}
+	queue_midi_out ( fjack->buffer_midi_out, data, data_size, logFuncName, fp->id );
 }
 
-void song_send(FHCTRL* fhctrl, short SongNumber) {
+void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
-	short i;
-	FSTPlug* fp;
-	Song* song = song_get(fhctrl->songs, SongNumber);
+	Song* song = song_get (fhctrl->songs, SongNumber);
 	if (!song) return;
 	
-	enum State curState;
 	collect_rt_logs( fjack, "SendSong \"%s\"", song->name);
-	// Dump states via SysEx - for all FST
-	for (i=0; i < 128; i++) {
-		if (! (fp = fhctrl->fst[i]) ) continue;
 
-		curState = fp->state->state;
+	// Dump states via SysEx - for all FST
+	short i;
+	for (i=0; i < 128; i++) {
+		FSTPlug* fp = fhctrl->fst[i];
+		if ( ! fp ) continue;
+
+		/* Save current state */
+		enum State curState = fp->state->state;
+
+		/* Copy state from song */
 		*fp->state = *song->fst_state[i];
 		
 		// If unit is NA in Song then preserve it's current state and skip sending
-		if (fp->state->state == FST_NA) {
+		if ( fp->state->state == FST_NA ) {
 			fp->state->state = curState;
 			continue;
 		}
 
 		// Send state to unit
-		switch ( fp->type ) {
-		case FST_TYPE_DEVICE: ;
-			// For devices just send ProgramChange
-			jack_midi_data_t pc[2];
-			pc[0] = ( fp->state->channel - 1 ) & 0x0F;
-			pc[0] |= 0xC0;
-			pc[1] = fp->state->program & 0x0F;
-			queue_midi_out( fjack->buffer_midi_out, pc, sizeof (pc), "SendSong", fp->id);
-			break;
-		case FST_TYPE_PLUGIN:
+		if (curState == FST_NA) {
 			// If unit is NA then keep it state and skip sending
-			if (curState == FST_NA) {
-				fp->state->state = FST_NA;
-			} else {
-				fst_send(fhctrl, fp);
-			}
-			break;
+			// NOTE: this is valid only for PLUGIN type units
+			fp->state->state = FST_NA;
+		} else {
+			fhctrl_fst_send ( fhctrl, fp, "SongSend" );
 		}
+
 		fp->change = true; // Update display
 	}
 }
@@ -230,7 +226,13 @@ void update_lcd( struct LCDScreen* lcd_screen ) {
 	lcd_text(0,2,fp->name);			// Line 3
 }
 
-static void session_reply( FJACK* fjack ) {
+static inline void
+lcd_set_current_fst ( struct LCDScreen* lcd_screen, FSTPlug* fp ) {
+	if ( lcd_screen->available )
+		lcd_screen->fst = fp;
+}
+
+static void fjack_session_reply ( FJACK* fjack ) {
 	LOG("session callback");
 
 	FHCTRL* fhctrl = (FHCTRL*) fjack->user;
@@ -263,7 +265,7 @@ static void connect_to_physical( FJACK* j ) {
 	
 	const char *pname = jack_port_name( j->fin );
 	int i;
-	for (i=0; jports[i] != NULL; i++) {
+	for (i=0; jports[i]; i++) {
 		if (jack_port_connected_to(j->fin, jports[i])) continue;
 		jack_connect(j->client, jports[i], pname);
 		LOG("%s -> %s\n", pname, jports[i]);
@@ -271,13 +273,13 @@ static void connect_to_physical( FJACK* j ) {
 	jack_free(jports);
 }
 
-void session_callback_handler(jack_session_event_t *event, void* arg) {
+void session_callback_handler (jack_session_event_t *event, void* arg) {
 	FJACK* fjack = (FJACK*) arg;
 	fjack->session_event = event;
 	fjack->need_ses_reply = true;
 }
 
-int graph_order_callback_handler( void *arg ) {
+int graph_order_callback_handler ( void *arg ) {
 	FJACK* fjack =(FJACK*) arg;
 	FHCTRL* fhctrl = (FHCTRL*) fjack->user;
 	// If our outport isn't connected to anyware - it's no sense to try send anything
@@ -315,6 +317,7 @@ static void collect_rt_logs(FJACK* fjack, char *fmt, ...) {
 	va_start(args, fmt);
 	vsnprintf(info, sizeof(info), fmt, args);
 	va_end(args);
+
 	uint8_t len = strlen(info) + 1;
 
 	jack_ringbuffer_t* rbuf = fjack->log_collector;
@@ -335,7 +338,7 @@ inline bool ctrl_channel_handling ( FHCTRL* fhctrl, jack_midi_data_t data[] ) {
 	// Don't shine for realitime messages
 	if ( data[0] < 0xF0 ) fhctrl->gui.ctrl_midi_in = true;
 
-	if ( (data[0] & 0xF0) == 0xC0 ) song_send( fhctrl, data[1] );
+	if ( (data[0] & 0xF0) == 0xC0 ) fhctrl_song_send( fhctrl, data[1] );
 	return true;
 }
 
@@ -344,8 +347,6 @@ int process (jack_nframes_t frames, void* arg) {
 	FHCTRL* fhctrl = (FHCTRL*) j->user;
 
 	jack_nframes_t i, count;
-	jack_midi_event_t event;
-	FSTPlug* fp;
 
 	void* inbuf = jack_port_get_buffer (j->in, frames);
 	assert (inbuf);
@@ -356,6 +357,7 @@ int process (jack_nframes_t frames, void* arg) {
 
 	count = jack_midi_get_event_count (inbuf);
 	for (i = 0; i < count; ++i) {
+		jack_midi_event_t event;
 		if (jack_midi_event_get (&event, inbuf, i) != 0) break;
 
 //		collect_rt_logs(j, "MIDI: %X", event.buffer[0]);
@@ -380,38 +382,32 @@ int process (jack_nframes_t frames, void* arg) {
 					send_offer(fhctrl, r);
 				} else {
 					// Note: we refresh GUI when dump back to us
-					fp = fst_get( fhctrl->fst, fhctrl->songs, r->model[0] );
+					FSTPlug* fp = fst_get ( fhctrl->fst, fhctrl->songs, r->model[0] );
 					fp->type = FST_TYPE_PLUGIN; // We just know this ;-)
-					send_dump_request(fhctrl, fp->id);
+					send_dump_request (fhctrl, fp->id);
 				}
 			} /* else { Regular device - not supported yet } */
 			break;
 		case SYSEX_MYID:
 			if (event.size < sizeof(SysExDumpV1)) continue;
 
-			SysExDumpV1* d = (SysExDumpV1*) event.buffer;
-			if (d->type != SYSEX_TYPE_DUMP) continue;
+			SysExDumpV1* sysex = (SysExDumpV1*) event.buffer;
+			if (sysex->type != SYSEX_TYPE_DUMP) continue;
 
-			collect_rt_logs(j, "Got SysEx Dump %X : %s : %s", d->uuid, d->plugin_name, d->program_name);
-			/* Dump from address zero is fail - try fix this by drop and send ident req */
-			if (d->uuid == 0) {
+			collect_rt_logs(j, "Got SysEx Dump %X : %s : %s", sysex->uuid, sysex->plugin_name, sysex->program_name);
+
+			/* Dump from address zero is fail - try fix this sending ident req */
+			if (sysex->uuid == 0) {
 				send_ident_request( fhctrl );
 				continue;
 			}
 
-			fp = fst_get( fhctrl->fst, fhctrl->songs, d->uuid );
-			fp->type = FST_TYPE_PLUGIN; // We just know this ;-)
-			fp->state->state = d->state;
-			fp->state->program = d->program;
-			fp->state->channel = d->channel;
-			fp->state->volume = d->volume;
-			strcpy(fp->state->program_name, (char*) d->program_name);
-			strcpy(fp->name, (char*) d->plugin_name);
+			/* This also create new FSTPlug if needed */
+			/* FIXME: this use fst_new which use calloc */
+			FSTPlug* fp = fst_get_from_sysex ( fhctrl->fst, fhctrl->songs, sysex );
 
-			if (fhctrl->lcd_screen.available)
-				fhctrl->lcd_screen.fst = fp;
+			lcd_set_current_fst ( &fhctrl->lcd_screen, fp );
 
-			fp->change = true;
 			break;
 		}
 	}
@@ -443,6 +439,7 @@ int process (jack_nframes_t frames, void* arg) {
 
 	count = jack_midi_get_event_count (inbuf);
 	for (i = 0; i < count; ++i) {
+		jack_midi_event_t event;
 		if (jack_midi_event_get (&event, inbuf, i) != 0) break;
 
 		if ( ctrl_channel_handling ( fhctrl, event.buffer ) ) continue;
@@ -460,13 +457,12 @@ int process (jack_nframes_t frames, void* arg) {
 	return 0;
 }
 
-void update_config(FHCTRL* fhctrl) {
-	if (fhctrl->config_file) dump_state( fhctrl );
+void update_config (FHCTRL* fhctrl) {
+	if (fhctrl->config_file) dump_state ( fhctrl );
 }
 
 // Will be called from nfhc
-void idle_cb( void* arg ) {
-	FHCTRL* fhctrl = (FHCTRL*) arg;
+void fhctrl_idle ( FHCTRL* fhctrl ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
 	/* Update LCD */
@@ -478,7 +474,7 @@ void idle_cb( void* arg ) {
 	/* If Jack need our answer */
 	if (fjack->need_ses_reply) {
 		fjack->need_ses_reply = false;
-		session_reply( fjack );
+		fjack_session_reply( fjack );
 	}
 
 	/* Try connect to physical ports */
@@ -492,13 +488,18 @@ void idle_cb( void* arg ) {
 
 	/* Clear last offered and detect N/A (with some choke) */
 	if (fhctrl->offered_last_choke == 0) {
-		if (fhctrl->graph_order_changed > 0)
-			if (--fhctrl->graph_order_changed == 0) detect_na( fhctrl );
+		// Send SysEx Ident request if found some N/A units
+		// NOTE: don't trigger for non-sysex units
+		if ( fhctrl->graph_order_changed > 0 &&
+		     --(fhctrl->graph_order_changed) == 0 &&
+		     fst_is_any_na ( fhctrl->fst )
+		) send_ident_request ( fhctrl );
+
 		if (fhctrl->offered_last > 0) fhctrl->offered_last = 0;
 	} else fhctrl->offered_last_choke--;
 }
 
-void fjack_init( FJACK* fjack, void* user_ptr ) {
+void fjack_init ( FJACK* fjack, void* user_ptr ) {
 	fjack->user = user_ptr;
 
 	// Init log collector
@@ -552,9 +553,6 @@ void fhctrl_init( FHCTRL* fhctrl, void* user_ptr ) {
 
 	/* Try detect on start */
 	fhctrl->graph_order_changed = 1;
-
-	// Set pointer to idle callback
-	fhctrl->idle_cb = idle_cb;
 }
 
 int main (int argc, char* argv[]) {

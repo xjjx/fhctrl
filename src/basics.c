@@ -77,6 +77,24 @@ void fst_set_sysex ( FSTPlug* fp, SysExDumpV1* sysex ) {
         memcpy(sysex->plugin_name, fp->name, sizeof(sysex->plugin_name));
 }
 
+FSTPlug* fst_get_from_sysex ( FSTPlug** fst, Song** songs, SysExDumpV1* sysex ) {
+	FSTPlug* fp = fst_get( fst, songs, sysex->uuid );
+	FSTState* fs = fp->state;
+
+	fp->type = FST_TYPE_PLUGIN; // We just know this ;-)
+	strcpy ( fp->name, (char*) sysex->plugin_name );
+
+	fs->state	= sysex->state;
+	fs->program	= sysex->program;
+	fs->channel	= sysex->channel;
+	fs->volume	= sysex->volume;
+	strcpy ( fs->program_name, (char*) sysex->program_name );
+
+	fp->change = true; // Update display
+
+	return fp;
+}
+
 bool fst_is_any_na ( FSTPlug** fst ) {
 	uint8_t i;
 	for(i=0; i < 128; i++) {

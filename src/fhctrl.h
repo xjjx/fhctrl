@@ -27,7 +27,6 @@ typedef struct _FHCTRL {
 	uint8_t			graph_order_changed;
 	Song*			song_first;
 	void*			user;
-	void (*idle_cb)(void* arg);
 
 	/* Public variables */
 	FSTPlug*		fst[128];
@@ -37,12 +36,13 @@ typedef struct _FHCTRL {
 } FHCTRL;
 
 /* nfhc.c */
-void nfhc(FHCTRL* fhctrl);
+void nfhc ( FHCTRL* fhctrl );
 
 /* Exported functions */
-void send_ident_request( FHCTRL* fhctrl );
-void song_send( FHCTRL* fhctrl, short SongNumber);
-void update_config( FHCTRL* fhctrl );
-int cpu_load( FHCTRL* fhctrl );
-void fst_send(FHCTRL* fhctrl, FSTPlug* fp);
-void send_dump_request(FHCTRL* fhctrl, short id);
+void send_ident_request ( FHCTRL* fhctrl );
+void fhctrl_song_send ( FHCTRL* fhctrl, short SongNumber);
+void fhctrl_fst_send ( FHCTRL* fhctrl, FSTPlug* fp, const char* logFuncName );
+void update_config ( FHCTRL* fhctrl );
+int cpu_load ( FHCTRL* fhctrl );
+void send_dump_request ( FHCTRL* fhctrl, short id );
+void fhctrl_idle ( FHCTRL* fhctrl );
