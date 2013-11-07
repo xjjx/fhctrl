@@ -325,7 +325,8 @@ static void collect_rt_logs(FJACK* fjack, char *fmt, ...) {
 }
 
 // Midi control channel handling - true if handled
-inline bool ctrl_channel_handling ( FHCTRL* fhctrl, jack_midi_data_t data[] ) {
+static inline bool
+ctrl_channel_handling ( FHCTRL* fhctrl, jack_midi_data_t data[] ) {
 	if ( (data[0] & 0x0F) != CTRL_CHANNEL ) return false;
 
 	// Don't shine for realitime messages
