@@ -378,7 +378,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 			case 'u': // Update Song
 				setCDKScrollHighlight(song_list, A_REVERSE);
 				tm = activateCDKScroll(song_list, NULL);
-				song_update( fst, song_get( fhctrl->songs, tm) );
+				song_update( song_get( fhctrl->songs, tm), fst );
 				setCDKScrollHighlight(song_list, A_NORMAL);
 				break;
 			case 'i': send_ident_request( fhctrl ); break;

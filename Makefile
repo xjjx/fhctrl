@@ -1,42 +1,54 @@
-#CFLAGS = -O2 -Wall -g
-CFLAGS = -O2 -Wall -Wno-deprecated-declarations -g -frounding-math -fsignaling-nans -mfpmath=sse -msse2
+APP = fhctrl
+
+PKG_CONFIG_MODULES := jack ncurses libftdi libconfig
+CFLAGS = -g -O2 -Wall -mfpmath=sse -msse2
+CFLAGS_APP = $(CFLAGS)
+CFLAGS_APP += $(shell pkg-config --cflags $(PKG_CONFIG_MODULES))
+CFLAGS_APP += -I/usr/include/cdk
+
+LIBRARIES := $(shell pkg-config --libs $(PKG_CONFIG_MODULES))
+LIBRARIES += -lcdk
+
 DESTDIR =
+BINDIR = usr/bin
+
 
 .PHONY: all,clean
 
-all: fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect
+all: fhctrl sn lsp connect
 
-fhctrl: nfhc.c config.c ftdilcd.c fhctrl.c log.c
-	$(CC) $(CFLAGS) -o $@ $^ -ljack -lconfig -lcdk -lcurses -lftdi -I/usr/include/cdk
+$(APP): src/nfhc.c src/config.c src/ftdilcd.c src/basics.c src/fhctrl.c src/log.c
+	$(CC) $(CFLAGS_APP) -o $@ $^ $(LIBRARIES)
 	
-fhctrl_sn: session_notify.c
-	$(CC) $(CFLAGS) -o $@ $^ -ljack
+sn: tools/session_notify.c
+	$(CC) $(CFLAGS) -o $(APP)_$@ $^ -ljack
 
-fhctrl_lsp: lsp.c
-	$(CC) $(CFLAGS) -o $@ $^ -ljack
+lsp: tools/lsp.c
+	$(CC) $(CFLAGS) -Wno-deprecated-declarations -o $(APP)_$@ $^ -ljack
 
-fhctrl_connect: connect.c
-	$(CC) $(CFLAGS) -o $@ $^ -ljack
+connect: tools/connect.c
+	$(CC) $(CFLAGS) -o $(APP)_$@ $^ -ljack
 
-colors: colors.c
+colors: unused/colors.c
 	$(CC) $(CFLAGS) -o $@ $^ -lcdk -lcurses -I/usr/include/cdk
 
-test: test.c
+test: unused/test.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack
 
-fhctrl_transport: transport.c
-	$(CC) $(CFLAGS) -o $@ $^ -ljack -lreadline -lm
+transport: transport.c
+	$(CC) $(CFLAGS) -o $(APP)_$@ $^ -ljack -lreadline
 
 inprocess: inprocess.c
 	$(CC) $(CFLAGS) -o $@ $^ -fPIC -shared -ljack
 
 clean:
-	rm -f fhctrl fhctrl_sn fhctrl_lsp fhctrl_connect colors test inprocess fhctrl_transport
+	rm -f $(APP) $(APP)_sn $(APP)_lsp $(APP)_connect $(APP)_transport colors test inprocess
 
 install: all
-	install -Dm755 fhctrl $(DESTDIR)/usr/bin/fhctrl
-	install -Dm755 xjsm $(DESTDIR)/usr/bin/xjsm
-	install -Dm755 fhctrl_sn $(DESTDIR)/usr/bin/fhctrl_sn
-	install -Dm755 fhctrl_lsp $(DESTDIR)/usr/bin/fhctrl_lsp
-	install -Dm755 fhctrl_connect $(DESTDIR)/usr/bin/fhctrl_connect
-#	install -Dm755 fhctrl_transport $(DESTDIR)/usr/bin/fhctrl_transport
+	install -Dm755 $(APP) $(DESTDIR)/$(BINDIR)/$(APP)
+	install -Dm755 xjsm $(DESTDIR)/$(BINDIR)/xjsm
+	install -Dm755 $(APP)_sn $(DESTDIR)/$(BINDIR)/$(APP)_sn
+	install -Dm755 $(APP)_lsp $(DESTDIR)/$(BINDIR)/$(APP)_lsp
+	install -Dm755 $(APP)_connect $(DESTDIR)/$(BINDIR)/$(APP)_connect
+#	install -Dm755 $(APP)_transport $(DESTDIR)/$(BINDIR)/$(APP)_transport
+
