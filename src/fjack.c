@@ -21,17 +21,70 @@ session_callback_handler (jack_session_event_t *event, void* arg) {
 	fjack->need_ses_reply = true;
 }
 
-bool queue_midi_out (jack_ringbuffer_t* rbuf, jack_midi_data_t* data, size_t size, const char* What, int8_t id) {
-	if (jack_ringbuffer_write_space(rbuf) < size + sizeof(size)) {
-		LOG("%s - No space in MIDI OUT buffer (ID:%d)", What, id);
+static bool
+queue_midi_out (jack_ringbuffer_t* rbuf, jack_midi_data_t* data, size_t size ) {
+	if ( jack_ringbuffer_write_space(rbuf) < size + sizeof(size) ) {
+		LOG ("No space in MIDI OUT buffer");
 		return false;
-	} else {
-		// Size of message
-		jack_ringbuffer_write(rbuf, (char*) &size, sizeof size);
-		// Message itself
-		jack_ringbuffer_write(rbuf, (char*) data, size);
-		return true;
 	}
+
+	// Size of message
+	jack_ringbuffer_write(rbuf, (char*) &size, sizeof size);
+	// Message itself
+	jack_ringbuffer_write(rbuf, (char*) data, size);
+	return true;
+}
+
+bool fjack_send ( FJACK* fjack, void* data, size_t size, const char* What, int8_t id ) {
+	bool ret = queue_midi_out ( fjack->buffer_midi_out, (jack_midi_data_t*) data, size );
+
+	if ( ret ) {
+		return true;
+	} else {
+		LOG ("%s - Cannot send for ID:%d", What, id);
+		return false;
+	}
+}
+
+void fjack_send_ident_request ( FJACK* fjack ) {
+	LOG("Send ident request");
+	SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;
+	fjack_send ( fjack,
+		     (jack_midi_data_t*) &sysex_ident_request,
+		     sizeof(SysExIdentRqst),
+		     "SendIdentRequest",
+		     -1
+	);
+}
+
+void fjack_send_dump_request ( FJACK* fjack , short id ) {
+	SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
+	sysex_dump_request.uuid = id;
+	LOG("Sent dump request for ID:%d", id);
+	fjack_send ( fjack,
+		     (jack_midi_data_t*) &sysex_dump_request,
+		     sizeof(SysExDumpRequestV1),
+		     "SendDumpRequest",
+		     id
+	);
+}
+
+void fjack_send_offer ( FJACK* fjack, SysExIdentReply* reply, uint8_t uuid ) {
+	SysExIdOffer sysex_offer = SYSEX_OFFER;
+
+	sysex_offer.uuid = uuid;
+	memcpy(sysex_offer.rnid, reply->version, sizeof(sysex_offer.rnid));
+
+	collect_rt_logs( fjack, "Send Offer %d for %X %X %X %X", sysex_offer.uuid,
+		sysex_offer.rnid[0], sysex_offer.rnid[1], sysex_offer.rnid[2], sysex_offer.rnid[3]
+	);
+
+	fjack_send ( fjack,
+		     (jack_midi_data_t*) &sysex_offer,
+		     sizeof(SysExIdOffer),
+		     "SendOffer",
+		     sysex_offer.uuid
+	);
 }
 
 void connect_to_physical ( FJACK* fjack ) {

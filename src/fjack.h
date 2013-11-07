@@ -8,6 +8,8 @@
 #include <jack/session.h>
 #include <jack/ringbuffer.h>
 
+#include "sysex.h"
+
 typedef struct _FJACK {
 	jack_client_t*		client;
 	jack_port_t*		in;
@@ -26,7 +28,7 @@ typedef struct _FJACK {
 
 void collect_rt_logs ( FJACK* fjack, char *fmt, ... );
 
-bool queue_midi_out (jack_ringbuffer_t* rbuf, jack_midi_data_t* data, size_t size, const char* What, int8_t id);
+bool fjack_send ( FJACK* fjack, void* data, size_t size, const char* What, int8_t id );
 
 void connect_to_physical ( FJACK* fjack );
 
@@ -36,5 +38,10 @@ void collect_rt_logs ( FJACK* fjack, char *fmt, ... );
 
 void fjack_init ( FJACK* fjack, const char* client_name, void* user_ptr );
 
-#endif /* __fjack_h__ */
+void fjack_send_ident_request ( FJACK* fjack );
 
+void fjack_send_offer ( FJACK* fjack, SysExIdentReply* reply, uint8_t uuid );
+
+void fjack_send_dump_request ( FJACK* fjack , short id );
+
+#endif /* __fjack_h__ */

@@ -19,9 +19,9 @@
 
 #include "basics.h"
 #include "fjack.h"
-#include "sysex.h"
 #include "fhctrl.h"
 #include "log.h"
+#include "sysex.h"
 
 #include "ftdilcd.h"
 
@@ -33,88 +33,50 @@ bool dump_state( FHCTRL* fhctrl );
 bool load_state( FHCTRL* fhctrl );
 
 /* Functions */
-void send_ident_request( FHCTRL* fhctrl ) {
-	FJACK* fjack = (FJACK*) fhctrl->user;
-
+void send_ident_request ( FHCTRL* fhctrl ) {
 	fst_reset_to_na ( fhctrl->fst );
 
-	LOG("Send ident request");
-	SysExIdentRqst sysex_ident_request = SYSEX_IDENT_REQUEST;
-	queue_midi_out(
-		fjack->buffer_midi_out,
-		(jack_midi_data_t*) &sysex_ident_request,
-		sizeof(SysExIdentRqst),
-		"SendIdentRequest",
-		-1
-	);
+	FJACK* fjack = (FJACK*) fhctrl->user;
+	fjack_send_ident_request ( fjack );
 }
 
 void send_dump_request( FHCTRL* fhctrl , short id ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
-
-	SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
-	sysex_dump_request.uuid = id;
-	LOG("Sent dump request for ID:%d", id);
-	queue_midi_out(
-		fjack->buffer_midi_out,
-		(jack_midi_data_t*) &sysex_dump_request,
-		sizeof(SysExDumpRequestV1),
-		"SendDumpRequest",
-		id
-	);
+	fjack_send_dump_request ( fjack , id );
 }
 
 static void inline
-send_offer ( FHCTRL* fhctrl, SysExIdentReply* r ) {
+send_offer ( FHCTRL* fhctrl, SysExIdentReply* reply ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
-	SysExIdOffer sysex_offer = SYSEX_OFFER;
+	uint8_t uuid = fst_uniqe_id (fhctrl->fst, fhctrl->offered_last + 1);
+	if ( uuid == 0 ) return; /* No more free id ? :-( */
 
-	/* No more free id ? :-( */
-	if ( (sysex_offer.uuid = fst_uniqe_id(fhctrl->fst, fhctrl->offered_last + 1)) == 0 ) return;
+	fjack_send_offer ( fjack, reply, uuid );
+
 	fhctrl->offered_last_choke = 10;
-
-	memcpy(sysex_offer.rnid, r->version, sizeof(sysex_offer.rnid));
-	fhctrl->offered_last = sysex_offer.uuid;
-
-	collect_rt_logs( fjack, "Send Offer %d for %X %X %X %X", sysex_offer.uuid,
-		sysex_offer.rnid[0], sysex_offer.rnid[1], sysex_offer.rnid[2], sysex_offer.rnid[3]
-	);
-
-	queue_midi_out(
-		fjack->buffer_midi_out,
-		(jack_midi_data_t*) &sysex_offer,
-		sizeof(SysExIdOffer),
-		"SendOffer",
-		sysex_offer.uuid
-	);
+	fhctrl->offered_last = uuid;
 }
 
 void fhctrl_fst_send ( FHCTRL* fhctrl, FSTPlug* fp, const char* logFuncName ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
-	jack_midi_data_t pc[2];
-	SysExDumpV1 sysex = SYSEX_DUMP;
-	jack_midi_data_t* data = NULL;
-	size_t data_size = 0;
-
 	switch ( fp->type ) {
-	case FST_TYPE_DEVICE:
+	case FST_TYPE_DEVICE: ;
 		// For devices just send ProgramChange
+		jack_midi_data_t pc[2];
 		pc[0] = ( fp->state->channel - 1 ) & 0x0F;
 		pc[0] |= 0xC0;
 		pc[1] = fp->state->program & 0x0F;
-		data = (jack_midi_data_t*) &pc;
-		data_size = sizeof pc;
+		fjack_send ( fjack, &pc, sizeof pc, logFuncName, fp->id );
 		break;
-	case FST_TYPE_PLUGIN:
+	case FST_TYPE_PLUGIN: ;
 		// If unit is NA then keep it state and skip sending
+		SysExDumpV1 sysex = SYSEX_DUMP;
 		fst_set_sysex ( fp, &sysex );
-		data = (jack_midi_data_t*) &sysex;
-		data_size = sizeof(SysExDumpV1);
+		fjack_send ( fjack, &sysex, sizeof sysex, logFuncName, fp->id );
 		break;
 	}
-	queue_midi_out ( fjack->buffer_midi_out, data, data_size, logFuncName, fp->id );
 }
 
 void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
