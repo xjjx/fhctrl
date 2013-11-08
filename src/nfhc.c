@@ -13,7 +13,6 @@
 #include "fhctrl.h"
 #include "log.h"
 
-#define LEFT_MARGIN	0	/* Where the plugin boxes start */
 #define RIGHT_MARGIN	80	/* Where the infoboxes start */
 #define TOP_MARGIN	5	/* How much space is reserved for the logo */
 #define SONGWIN_WIDTH	42	/* Song window width */
@@ -234,13 +233,16 @@ void box_update ( struct box *box, FSTPlug *fp) {
 
 void box_cleanup ( struct box** first ) {
 	struct box* box = *first;
+	int i = 0;
 	while ( box ) {
 		struct box* next = box->next;
 		destroyCDKLabel ( box->label );
 		free ( box );
 		box = next;
+		i++;
 	}
 	*first = NULL;
+	LOG ( "DESTROY %d", i );
 }
 
 void handle_slider ( CDKSLIDER *slider, int new_value ) {
@@ -293,6 +295,17 @@ struct box* box_new ( struct box** first, int x, int y ) {
 	return new;
 }
 
+CDKLABEL* init_logo ( int x, int y ) {
+	char* mesg[5];
+	mesg[0] ="</56> ______   __  __     ______     ______   ______     __";
+	mesg[1] ="</56>/\\  ___\\ /\\ \\_\\ \\   /\\  ___\\   /\\__  _\\ /\\  == \\   /\\ \\ ";
+	mesg[2] ="</56>\\ \\  __\\ \\ \\  __ \\  \\ \\ \\____  \\/_/\\ \\/ \\ \\  __<   \\ \\ \\____";
+	mesg[3] ="</56> \\ \\_\\    \\ \\_\\ \\_\\  \\ \\_____\\    \\ \\_\\  \\ \\_\\ \\_\\  \\ \\_____\\ proudly";
+	mesg[4] ="</56>  \\/_/     \\/_/\\/_/   \\/_____/     \\/_/   \\/_/ /_/   \\/_____/ done by Xj / Blj";
+	CDKLABEL* logo = newCDKLabel (cdkscreen, x, y, mesg, 5, FALSE, FALSE);
+	return logo;
+}
+
 void nfhc ( FHCTRL* fhctrl ) {
 	bool need_redraw = true;
 	char *mesg[9];
@@ -309,12 +322,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 	initCDKColor();
 
 	/* top_logo label setup */
-	mesg[0] ="</56> ______   __  __     ______     ______   ______     __";
-	mesg[1] ="</56>/\\  ___\\ /\\ \\_\\ \\   /\\  ___\\   /\\__  _\\ /\\  == \\   /\\ \\ ";
-	mesg[2] ="</56>\\ \\  __\\ \\ \\  __ \\  \\ \\ \\____  \\/_/\\ \\/ \\ \\  __<   \\ \\ \\____";
-	mesg[3] ="</56> \\ \\_\\    \\ \\_\\ \\_\\  \\ \\_____\\    \\ \\_\\  \\ \\_\\ \\_\\  \\ \\_____\\ proudly";
-	mesg[4] ="</56>  \\/_/     \\/_/\\/_/   \\/_____/     \\/_/   \\/_/ /_/   \\/_____/ done by Xj / Blj";
-	CDKLABEL* top_logo = newCDKLabel (cdkscreen, LEFT, TOP, mesg, 5, FALSE, FALSE);
+	CDKLABEL* top_logo = init_logo ( LEFT, TOP );
 
 	/* SELECTOR init - same shit for all boxes */
 	int rows, cols;
@@ -323,7 +331,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 	rows -= 5 + BOX_HEIGHT;
 	struct box* box_first = NULL;
 	short lm, tm;
-	for ( lm = LEFT_MARGIN; lm < cols; lm += BOX_WIDTH + 1 )
+	for ( lm = 0; lm < cols; lm += BOX_WIDTH + 1 )
 		for ( tm = TOP_MARGIN; tm < rows; tm += BOX_HEIGHT )
 			box_new ( &box_first, lm, tm );
 	/* Lights */
@@ -353,7 +361,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 	/* Foot */
 	mesg[0] ="</32> q - quit, s - set song, n - new song, u - update song, g - change song name, i - send ident request, w - write config";
 	mesg[1] = "</32> e - edit, l - show full log";
-	CDKLABEL* foot = newCDKLabel (cdkscreen, LEFT_MARGIN, BOTTOM, mesg, 2, FALSE, FALSE);
+	CDKLABEL* foot = newCDKLabel (cdkscreen, LEFT, BOTTOM, mesg, 2, FALSE, FALSE);
 	drawCDKLabel(foot, TRUE);
 
 	/* Configure keyboard on top_logo */
@@ -397,7 +405,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 				drawCDKLabel(box->label, TRUE);
 			drawCDKSlider(cpu_usage, FALSE);
 			drawCDKLabel(foot, TRUE);
-//			refreshCDKScreen(cdkscreen);
+			refreshCDKScreen(cdkscreen);
 		}
 
 		short r;
@@ -430,20 +438,24 @@ void nfhc ( FHCTRL* fhctrl ) {
 			case 'w': update_config( fhctrl ); break; // Update config file
 			case 'e': edit_selector (fhctrl); need_redraw = true; break;
 			case 'l': show_log(); need_redraw = true; break;
+			case 'r':
 			case KEY_RESIZE:
-				//LOG ( "Resize" );
-				//int rows, cols;
+				LOG ( "Resize" );
+				int rows, cols;
 				getmaxyx ( cdkscreen->window, rows, cols );
 				cols -= SONGWIN_WIDTH + 1 + BOX_WIDTH;
 				rows -= 5 + BOX_HEIGHT;
 				struct box* box = box_first;
-				for ( lm = LEFT_MARGIN; lm < cols; lm += BOX_WIDTH + 1 ) {
+				for ( lm = 0; lm < cols; lm += BOX_WIDTH + 1 ) {
 					for ( tm = TOP_MARGIN; tm < rows; tm += BOX_HEIGHT ) {
 						box = box->next;
 						if ( ! box ) box = box_new ( &box_first, lm, tm );
 					}
 				}
 				if ( box->next ) box_cleanup ( &(box->next) );
+				moveCDKScroll ( song_list, lm, TOP_MARGIN, FALSE, FALSE);
+				moveCDKSwindow ( short_log, lm, TOP_MARGIN+SONGWIN_HEIGHT, FALSE, FALSE);
+				moveCDKLabel ( foot, LEFT, BOTTOM, FALSE, FALSE);
 				need_redraw = true;
 				break;
 		}
@@ -453,6 +465,8 @@ cleanup:
 	destroyCDKLabel(top_logo);
 	destroyCDKScroll(song_list);
 	destroyCDKSlider(cpu_usage);
+	set_logcallback ( NULL, NULL );
+	destroyCDKSwindow(short_log);
 	box_cleanup ( &box_first );
 	destroyCDKScreen(cdkscreen);
 	endCDK();
