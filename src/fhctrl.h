@@ -8,6 +8,7 @@
 
 struct LCDScreen {
 	bool available; /* Are we have LCD ? */
+	const char* app_name;
 	FSTPlug* fst;
 };
 

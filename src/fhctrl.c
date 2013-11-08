@@ -23,10 +23,17 @@
 #include "log.h"
 #include "sysex.h"
 
-#include "ftdilcd.h"
 
 #define CTRL_CHANNEL 15
 #define APP_NAME "FHControl"
+
+/* From lcd.c */
+extern void init_lcd( struct LCDScreen* lcd_screen );
+extern void update_lcd( struct LCDScreen* lcd_screen );
+extern void lcd_set_current_fst ( struct LCDScreen* lcd_screen, FSTPlug* fp );
+
+/* ftdi.h */
+extern void lcd_close();
 
 // Config file support
 bool dump_state( FHCTRL* fhctrl, const char* config_file );
@@ -116,42 +123,6 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 
 		fp->change = true; // Update display
 	}
-}
-
-static void init_lcd( struct LCDScreen* lcd_screen ) {
-	lcd_screen->available = lcd_init();
-	if (! lcd_screen->available) return;
-
-	char lcdline[16];
-	snprintf(lcdline, 16, "%s", APP_NAME);
-	lcd_text(0,0,lcdline);
-	snprintf(lcdline, 16, "says HELLO");
-	lcd_text(0,1,lcdline);
-	lcd_screen->fst = NULL;
-}
-
-static void update_lcd( struct LCDScreen* lcd_screen ) {
-	if (! lcd_screen->available) return;
-
-	FSTPlug* fp = lcd_screen->fst;
-	if(!fp) return;
-
-	char line[24];
-	snprintf(line, 24, "D%02d P%02d C%02d V%02d",
-		fp->id,
-		fp->state->program,
-		fp->state->channel,
-		fp->state->volume
-	);
-	lcd_text(0,0,line);			// Line 1
-	lcd_text(0,1,fp->state->program_name);	// Line 2
-	lcd_text(0,2,fp->name);			// Line 3
-}
-
-static inline void
-lcd_set_current_fst ( struct LCDScreen* lcd_screen, FSTPlug* fp ) {
-	if ( ! lcd_screen->available ) return;
-	lcd_screen->fst = fp;
 }
 
 static void fjack_session_reply ( FJACK* fjack ) {
@@ -431,6 +402,7 @@ int main (int argc, char* argv[]) {
 //	sleep(1); // Time for resize terminal
 
 	// Init LCD
+	fhctrl.lcd_screen.app_name = APP_NAME;
 	init_lcd( &fhctrl.lcd_screen );
 
 	// Try read file
