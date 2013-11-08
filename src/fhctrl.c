@@ -103,13 +103,20 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 		/* Save current state */
 		enum State curState = fp->state->state;
 
-		/* Copy state from song */
-		*fp->state = *song->fst_state[i];
-		
-		// If unit is NA in Song then preserve it's current state and skip sending
-		if ( fp->state->state == FST_NA ) {
-			fp->state->state = curState;
-			continue;
+		// If unit state in song is NA do not copy plugin state
+		FSTState* songFS = song->fst_state[i];
+		if ( songFS->state == FST_NA ) {
+			switch ( fp->type ) {
+			case FST_TYPE_PLUGIN:
+				// For plugin type this mean set it to bypass
+				fp->state->state = FST_STATE_BYPASS;
+				break;
+			default: // For rest .. mean do nothing
+				continue;
+			}
+		} else {
+			/* Copy state from song */
+			*fp->state = *songFS;
 		}
 
 		// Send state to unit
@@ -187,6 +194,36 @@ ctrl_channel_handling ( FHCTRL* fhctrl, jack_midi_data_t data[] ) {
 }
 
 static inline void
+fhctrl_handle_ident_reply ( FHCTRL* fhctrl, SysExIdentReply* r ) {
+	// If this is FSTPlug then try to deal with him ;-)
+	if ( r->id == SYSEX_MYID ) {
+		if ( r->model[0] == 0 ) {
+			send_offer ( fhctrl, r );
+		} else {
+			// Note: we refresh GUI when dump back to us
+			FSTPlug* fp = fst_get ( fhctrl->fst, fhctrl->songs, r->model[0] );
+			fp->type = FST_TYPE_PLUGIN; // We just know this ;-)
+			send_dump_request (fhctrl, fp->id);
+		}
+	} /* else { Regular device - not supported yet } */
+}
+
+static inline void
+fhctrl_handle_sysex_dump ( FHCTRL* fhctrl, SysExDumpV1* sysex ) {
+	/* Dump from address zero mean unknown device - try fix this sending ident req */
+	if (sysex->uuid == 0) {
+		send_ident_request( fhctrl );
+		return;
+	}
+
+	/* This also create new FSTPlug if needed */
+	/* FIXME: this use fst_new which can use calloc for new units */
+	FSTPlug* fp = fst_get_from_sysex ( fhctrl->fst, fhctrl->songs, sysex );
+
+	lcd_set_current_fst ( &fhctrl->lcd_screen, fp );
+}
+
+static inline void
 fjack_out_port_handling ( FJACK* j, jack_nframes_t frames ) {
 	void* outbuf = jack_port_get_buffer(j->out, frames);
 	assert (outbuf);
@@ -206,8 +243,13 @@ fjack_out_port_handling ( FJACK* j, jack_nframes_t frames ) {
 		jack_midi_data_t tmpbuf[size];
 		jack_ringbuffer_read(j->buffer_midi_out, (char*) &tmpbuf, size);
 
-		if (jack_midi_event_write(outbuf, j->buffer_size - 1, (const jack_midi_data_t *) &tmpbuf, size) )
-			collect_rt_logs(j, "SendOur - Write dropped");
+		int ret = jack_midi_event_write (
+			outbuf,
+			0, // First frame
+			(const jack_midi_data_t *) &tmpbuf,
+			size
+		);
+		if ( ret != 0 ) collect_rt_logs(j, "SendOur - Write dropped");
 	}
 }
 
@@ -239,36 +281,6 @@ fjack_forward_port_handling ( FJACK* j, jack_nframes_t frames ) {
 			break;
 		}
 	}
-}
-
-static inline void
-fhctrl_handle_ident_reply ( FHCTRL* fhctrl, SysExIdentReply* r ) {
-	// If this is FSTPlug then try to deal with him ;-)
-	if ( r->id == SYSEX_MYID ) {
-		if ( r->model[0] == 0 ) {
-			send_offer ( fhctrl, r );
-		} else {
-			// Note: we refresh GUI when dump back to us
-			FSTPlug* fp = fst_get ( fhctrl->fst, fhctrl->songs, r->model[0] );
-			fp->type = FST_TYPE_PLUGIN; // We just know this ;-)
-			send_dump_request (fhctrl, fp->id);
-		}
-	} /* else { Regular device - not supported yet } */
-}
-
-static inline void
-fhctrl_handle_sysex_dump ( FHCTRL* fhctrl, SysExDumpV1* sysex ) {
-	/* Dump from address zero mean unknown device - try fix this sending ident req */
-	if (sysex->uuid == 0) {
-		send_ident_request( fhctrl );
-		return;
-	}
-
-	/* This also create new FSTPlug if needed */
-	/* FIXME: this use fst_new which can use calloc for new units */
-	FSTPlug* fp = fst_get_from_sysex ( fhctrl->fst, fhctrl->songs, sysex );
-
-	lcd_set_current_fst ( &fhctrl->lcd_screen, fp );
 }
 
 static inline void
@@ -320,7 +332,7 @@ int process (jack_nframes_t frames, void* arg) {
 	FJACK* fjack = (FJACK*) arg;
 
 	/* Read input */
-	fjack_out_port_handling ( fjack, frames );
+	fjack_in_port_handling ( fjack, frames );
 
 	/* Send our queued messages */
 	fjack_out_port_handling ( fjack, frames );
