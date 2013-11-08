@@ -114,7 +114,7 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 
 		// Send state to unit
 		if (curState == FST_NA) {
-			// If unit is NA then keep it state and skip sending
+			// If unit was NA then keep it state and skip sending
 			// NOTE: this is valid only for PLUGIN type units
 			fp->state->state = FST_NA;
 		} else {

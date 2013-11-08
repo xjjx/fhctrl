@@ -6,44 +6,43 @@
 #include "log.h"
 
 bool dump_state( FHCTRL* fhctrl, const char* config_file ) {
-	short i, j, sn = 0;
-	int ret;
 	char name[24];
-	Song* s;
-	FSTState* fs;
-	config_t cfg;
-	config_setting_t* group;
-	config_setting_t* song_name;
-	config_setting_t* list;
 
+	config_t cfg;
 	config_init(&cfg);
 
 	// Save plugs
-	group = config_setting_add(cfg.root, "global", CONFIG_TYPE_GROUP);
+	config_setting_t* group = config_setting_add(cfg.root, "global", CONFIG_TYPE_GROUP);
+	short i, j;
 	for (i = j = 0; i < 128; i++) {
 		if (fhctrl->fst[i] == NULL) continue;
 
 		snprintf(name, sizeof name, "plugin%d", j++);
-		list = config_setting_add(group, name, CONFIG_TYPE_LIST);
+
+		config_setting_t* list = config_setting_add(group, name, CONFIG_TYPE_LIST);
 		config_setting_set_int_elem(list, -1, fhctrl->fst[i]->id);
 		config_setting_set_int_elem(list, -1, fhctrl->fst[i]->type);
 		config_setting_set_string_elem(list, -1, fhctrl->fst[i]->name);
 	}
 
 	// Save songs
+	Song* s;
+	short sn = 0;
 	for(s = song_first(fhctrl->songs); s; s = s->next) {
 		snprintf(name, sizeof name, "song%d", sn++);
 		group = config_setting_add(cfg.root, name, CONFIG_TYPE_GROUP);
 
-		song_name = config_setting_add(group, "name", CONFIG_TYPE_STRING);
+		config_setting_t* song_name = config_setting_add(group, "name", CONFIG_TYPE_STRING);
 		config_setting_set_string( song_name, s->name );
+		short i, j;
 		for (i = j = 0; i < 128; i++) {
 			if (fhctrl->fst[i] == NULL) continue;
 
-			fs = s->fst_state[i];
+			FSTState* fs = s->fst_state[i];
 
 			snprintf(name, sizeof name, "plugin%d", j++);
-			list = config_setting_add(group, name, CONFIG_TYPE_LIST);
+
+			config_setting_t* list = config_setting_add(group, name, CONFIG_TYPE_LIST);
 			config_setting_set_int_elem(list, -1, fs->state);
 			config_setting_set_int_elem(list, -1, fs->program);
 			config_setting_set_int_elem(list, -1, fs->channel);
@@ -52,7 +51,7 @@ bool dump_state( FHCTRL* fhctrl, const char* config_file ) {
 		}
 	}
 
-	ret = config_write_file(&cfg, config_file);
+	int ret = config_write_file(&cfg, config_file);
 	config_destroy(&cfg);
 
 	if (ret == CONFIG_TRUE) {
@@ -65,17 +64,7 @@ bool dump_state( FHCTRL* fhctrl, const char* config_file ) {
 }
 
 bool load_state( FHCTRL* fhctrl, const char* config_file ) {
-	FSTPlug* f;
-	FSTState* fs;
-	Song* song;
 	config_t cfg;
-	config_setting_t* global;
-	config_setting_t* list;
-	char name[24];
-	const char* sparam;
-	const char* plugName;
-	unsigned short id, i, s;
-
 	config_init(&cfg);
 	if (!config_read_file(&cfg, config_file)) {
 		LOG("%s:%d - %s",
@@ -87,53 +76,83 @@ bool load_state( FHCTRL* fhctrl, const char* config_file ) {
 		return false;
 	}
 
+	// Get root
+	config_setting_t* root = config_root_setting ( &cfg );
+	if ( ! root ) return false; // WTF ?
+
 	// Global section
-	global = config_lookup(&cfg, "global");
-	for(i=0; i < config_setting_length(global); i++) {
-		list = config_setting_get_elem(global, i);
-		plugName = config_setting_name(list);
+	config_setting_t* global = config_setting_get_member ( root, "global" );
+	unsigned short i;
+	for (i=0; i < config_setting_length(global); i++) {
+		config_setting_t* list = config_setting_get_elem ( global, i );
 
-		id = config_setting_get_int_elem(list, 0);
-		f = fst_get(fhctrl->fst, fhctrl->songs, id);
-		f->type = config_setting_get_int_elem(list, 1);
+		const char* plugName = config_setting_name (list);
+		if ( ! plugName ) continue; // this is error
 
-		sparam = config_setting_get_string_elem(list, 2);
-		strcpy(f->name, sparam);
+		// Is this a proper plugin entry ?
+		if ( strstr ( plugName, "plugin" ) != plugName )
+			continue;
 
-		// Songs iteration
-		s = 0;
-		song = song_first(fhctrl->songs);
+		// Unit ID
+		unsigned short id = config_setting_get_int_elem(list, 0);
 
-again:
-		snprintf(name, sizeof name, "song%d", s);
-		if (config_lookup(&cfg, name) == NULL) continue;
+		// Create/Get unit for speific id
+		FSTPlug* fp = fst_get ( fhctrl->fst, fhctrl->songs, id );
 
-		// Create new song if needed
-		if (! song) {
-			song = song_new(fhctrl->songs, fhctrl->fst);
-			snprintf(name, sizeof name, "song%d.name", s);
-			const char* value;
-			if ( config_lookup_string ( &cfg, name, &value ) ) {
-				strncpy( song->name, value, 23 );
+		// Unit type
+		fp->type = config_setting_get_int_elem ( list, 1 );
+
+		// Unit name
+		const char* sparam = config_setting_get_string_elem ( list, 2 );
+		strncpy ( fp->name, sparam, 23 );
+
+		// Read unit states in songs
+		Song* song = song_first(fhctrl->songs);
+		unsigned short j;
+		for (j=0; j < config_setting_length(root); j++ ) {
+			config_setting_t* song_group = config_setting_get_elem ( root, j );
+
+			const char* elem_name = config_setting_name ( song_group );
+			if ( ! elem_name ) continue; // this is error
+
+			// If elem_name does not start with song ...
+			if ( strstr ( elem_name, "song" ) != elem_name )
+				continue;
+
+			// Song number
+			unsigned short song_number = strtol ( elem_name + 4, NULL, 10 );
+
+			// Create new song if needed
+			if (! song) {
+				song = song_new (fhctrl->songs, fhctrl->fst );
+
+				// Song name
+				const char* song_name;
+				int ret = config_setting_lookup_string ( song_group, "name", &song_name );
+				if ( ret == CONFIG_TRUE ) {
+					strncpy ( song->name, song_name, 23 );
+				} else { // Set default name
+					snprintf( song->name, 24, "Song %d", song_number);
+				}
 			}
-		}
 
-		snprintf(name, sizeof name, "song%d.%s", s++, plugName);
-		list = config_lookup(&cfg, name);
-		if (list != NULL) {
-			fs = song->fst_state[id];
-			fs->state = config_setting_get_int_elem(list, 0);
-			fs->program = config_setting_get_int_elem(list, 1);
-			fs->channel = config_setting_get_int_elem(list, 2);
-			fs->volume = config_setting_get_int_elem(list, 3);
-			sparam = config_setting_get_string_elem(list, 4);
-			if (sparam) strcpy(fs->program_name, sparam);
+			// Unit state in this song
+			config_setting_t* plug_list = config_setting_get_member ( song_group, plugName );
+
+			// Maybe this song doesn't have state for this unit ?
+			if ( plug_list ) {
+				FSTState* fs = song->fst_state[id];
+				fs->state	= config_setting_get_int_elem		( plug_list, 0 );
+				fs->program	= config_setting_get_int_elem		( plug_list, 1 );
+				fs->channel	= config_setting_get_int_elem		( plug_list, 2 );
+				fs->volume	= config_setting_get_int_elem		( plug_list, 3 );
+				const char* pname = config_setting_get_string_elem	( plug_list, 4 );
+				if (pname) strncpy ( fs->program_name, pname, 23 );
+			}
+			song = song->next;
 		}
-		song = song->next;
-		goto again;
 	}
 
 	config_destroy(&cfg);
-
 	return true;
 }
