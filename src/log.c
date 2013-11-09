@@ -47,12 +47,13 @@ void LOG ( char *fmt, ... ) {
 
 	/* Send message to defined user callback ( e.g. nLOG ) */
 	sem_wait ( &logsema );
-	if ( logcallback != NULL ) {
+	if ( logcallback != NULL && logcallback_user_data != NULL ) {
 		char msg[256];
 		va_start ( args, fmt );
 		vsnprintf ( msg, sizeof msg, fmt, args );
 		va_end ( args );
-		logcallback( msg, (void*) logcallback_user_data );
+		void* ud = (void*) logcallback_user_data;
+		logcallback( msg, ud );
 	}
 	sem_post ( &logsema );
 }

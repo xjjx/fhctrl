@@ -20,6 +20,8 @@
 #define BOX_HEIGHT	4	/* Label Box height */
 #define LABEL_LENGHT BOX_WIDTH + 11 /* TODO: what it is ;-) */
 
+int rc = 1;
+
 struct box {
 	struct box* next;
 	CDKLABEL *label;
@@ -51,10 +53,10 @@ int get_status_color ( FSTPlug* fp ) {
 }
 
 void nLOG ( char *msg, void *user_data ) {
-	CDKSWINDOW *short_log = (CDKSWINDOW*) user_data;
-	if ( ! short_log ) return;
+	CDKSWINDOW *sw = (CDKSWINDOW*) user_data;
+	if ( ! sw ) return;
 
-	addCDKSwindow ( short_log, msg, BOTTOM );
+	addCDKSwindow ( sw, msg, BOTTOM );
 }
 
 static void show_log () {
@@ -311,29 +313,32 @@ CDKLABEL* init_logo ( int x, int y ) {
 CDKSWINDOW* init_log_win ( int x, int y ) {
 	CDKSWINDOW *sw = newCDKSwindow ( cdkscreen, x, y, 7, SONGWIN_WIDTH + 1, NULL, 10, TRUE, FALSE);
 	set_logcallback ( nLOG, sw );
+//	set_logcallback ( NULL, NULL );
 	return sw;
 }
 
 void move_log_win ( CDKSWINDOW** sw, int x, int y ) {
 	set_logcallback ( NULL, NULL );
 
-	int lines;
-	chtype** info = getCDKSwindowContents ( *sw, &lines );
-	char* info2[lines];
-	short i;
-	for ( i = 0; i < lines; i++ )
-		info2[i] = chtype2Char ( info[i] );
-
-	freeChtypeList ( info, lines );
-	destroyCDKSwindow ( *sw );
-
 	CDKSWINDOW* newsw = newCDKSwindow ( cdkscreen, x, y, 7, SONGWIN_WIDTH + 1, NULL, 10, TRUE, FALSE);
-	setCDKSwindowContents ( newsw, info2, lines );
-	freeCharList ( info2, lines );
+	drawCDKSwindow ( newsw, TRUE );
 
-	*sw = newsw;
+	int lines = 0;
+	chtype** info = getCDKSwindowContents ( *sw, &lines );
+	if ( lines > 0 ) {
+		char* info2[lines];
+		short i;
+		for ( i = 0; i < lines; i++ )
+			info2[i] = chtype2Char ( info[i] );
+		setCDKSwindowContents ( newsw, info2, lines );
+		freeCharList ( info2, lines );
+	}
 
 	set_logcallback ( nLOG, newsw );
+
+//	destroyCDKSwindow ( *sw );
+
+	*sw = newsw;
 }
 
 void nfhc ( FHCTRL* fhctrl ) {
@@ -466,22 +471,26 @@ void nfhc ( FHCTRL* fhctrl ) {
 			case 'w': update_config( fhctrl ); break; // Update config file
 			case 'e': edit_selector (fhctrl); need_redraw = true; break;
 			case 'l': show_log(); need_redraw = true; break;
-			case 'r':
-			case KEY_RESIZE: ;
-//				LOG ( "Resize" );
+			case 'r': ;
+//			case KEY_RESIZE:
 				int rows, cols;
 				getmaxyx ( cdkscreen->window, rows, cols );
 				cols -= SONGWIN_WIDTH + BOX_WIDTH + 1;
 				rows -= LOGO_HEIGHT + BOX_HEIGHT;
-				struct box* box = box_first;
+				struct box** pbox = &box_first;
 				for ( lm = 0; lm < cols; lm += BOX_WIDTH + 1 ) {
 					for ( tm = LOGO_HEIGHT; tm < rows; tm += BOX_HEIGHT ) {
-						box = box->next;
-						if ( ! box ) box = box_new ( &box_first, lm, tm );
-						moveCDKLabel ( box->label, lm, tm, FALSE, FALSE );
+						struct box* box = *pbox;
+						if ( box ) {
+							moveCDKLabel ( box->label, lm, tm, FALSE, FALSE );
+						} else {
+							box = box_new ( &box_first, lm, tm );
+						}
+						pbox = &(box->next);
 					}
 				}
-				if ( box->next ) box_cleanup ( &(box->next) );
+				if ( *pbox ) box_cleanup ( pbox );
+
 				moveCDKScroll ( song_list, lm, LOGO_HEIGHT, FALSE, FALSE );
 				// FIXME: this have bug:
 				//moveCDKSwindow ( short_log, lm, LOGO_HEIGHT+SONGWIN_HEIGHT, FALSE, FALSE);
