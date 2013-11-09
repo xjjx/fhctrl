@@ -35,7 +35,6 @@ struct light {
 };
 
 CDKSCREEN* cdkscreen;
-CDKSCROLL *song_list;
 
 int get_status_color ( FSTPlug* fp ) {
 	switch ( fp->state->state ) {
@@ -90,17 +89,17 @@ static void show_log () {
 	destroyCDKViewer ( viewer);
 }
 
-void refresh_song_list ( Song** songs ) {
+void refresh_song_list ( CDKSCROLL* sl, Song** songs ) {
 	/* Clear List */
-	setCDKScrollItems ( song_list, NULL, 0, FALSE );
+	setCDKScrollItems ( sl, NULL, 0, FALSE );
 
 	/* Fill list again */
 	Song* song;
 	for ( song = *songs; song; song = song->next )
-		addCDKScrollItem(song_list, song->name);
+		addCDKScrollItem ( sl, song->name );
 }
 
-static void change_song_name ( Song** songs, Song *song ) {
+static void change_song_name ( CDKSCROLL* sl, Song** songs, Song *song ) {
 	if (! song) return;
 
 	const char *title = "Change Song name";
@@ -115,7 +114,7 @@ static void change_song_name ( Song** songs, Song *song ) {
 	char* value = activateCDKEntry ( entry, NULL );
 	if ( value && strcmp(song->name, value) ) {
 		strncpy( song->name, value, sizeof (song->name) );
-		refresh_song_list ( songs ); 
+		refresh_song_list ( sl, songs ); 
 	}
 
 	destroyCDKEntry ( entry );
@@ -299,6 +298,37 @@ struct box* box_new ( struct box** first, int x, int y ) {
 	return new;
 }
 
+/* Return left margin */
+short box_init ( struct box** first ) {
+	int rows, cols;
+	getmaxyx ( cdkscreen->window, rows, cols );
+	cols -= SONGWIN_WIDTH + 1 + BOX_WIDTH;
+	rows -= 5 + BOX_HEIGHT;
+	short lm, tm;
+	for ( lm = 0; lm < cols; lm += BOX_WIDTH + 1 )
+		for ( tm = LOGO_HEIGHT; tm < rows; tm += BOX_HEIGHT )
+			box_new ( first, lm, tm );
+	return lm;
+}
+
+/* Return true if something changed */
+static bool box_bind_to_fst ( struct box* box_first, FSTPlug** fst ) {
+	bool ret = false;
+	FSTPlug *fp;
+	struct box* box;
+	for ( fp = fst_next(fst,NULL), box = box_first;
+	      fp && box;
+	      fp = fst_next(fst,fp), box = box->next
+	) {
+		if ( fp->change || box->fstid != fp->id ) {
+			fp->change = false;
+			box_update ( box, fp );
+			ret = true;
+		}
+	}
+	return ret;
+}
+
 CDKLABEL* init_logo ( int x, int y ) {
 	char* mesg[5];
 	mesg[0] ="</56> ______   __  __     ______     ______   ______     __";
@@ -308,6 +338,15 @@ CDKLABEL* init_logo ( int x, int y ) {
 	mesg[4] ="</56>  \\/_/     \\/_/\\/_/   \\/_____/     \\/_/   \\/_/ /_/   \\/_____/ done by Xj / Blj";
 	CDKLABEL* logo = newCDKLabel (cdkscreen, x, y, mesg, 5, FALSE, FALSE);
 	return logo;
+}
+
+CDKLABEL* init_foot ( int x, int y ) {
+	char* mesg[2];
+	mesg[0] ="</32> q - quit, s - set song, n - new song, u - update song, g - change song name, i - send ident request, w - write config";
+	mesg[1] = "</32> e - edit, l - show full log, r - resize/refresh";
+	CDKLABEL* foot = newCDKLabel (cdkscreen, LEFT, BOTTOM, mesg, 2, FALSE, FALSE);
+	drawCDKLabel(foot, TRUE);
+	return foot;
 }
 
 CDKSWINDOW* init_log_win ( int x, int y ) {
@@ -342,10 +381,6 @@ void move_log_win ( CDKSWINDOW** sw, int x, int y ) {
 }
 
 void nfhc ( FHCTRL* fhctrl ) {
-	bool need_redraw = true;
-	char *mesg[9];
-	FSTPlug **fst = fhctrl->fst;
-
 	/* Initialize the Cdk screen.  */
 	WINDOW *screen = initscr();
 	cdkscreen = initCDKScreen (screen);
@@ -359,66 +394,45 @@ void nfhc ( FHCTRL* fhctrl ) {
 	/* top_logo label setup */
 	CDKLABEL* top_logo = init_logo ( LEFT, TOP );
 
-	/* SELECTOR init - same shit for all boxes */
-	int rows, cols;
-	getmaxyx ( cdkscreen->window, rows, cols );
-	cols -= SONGWIN_WIDTH + 1 + BOX_WIDTH;
-	rows -= 5 + BOX_HEIGHT;
+	/* BOX init - same shit for all boxes */
 	struct box* box_first = NULL;
-	short lm, tm;
-	for ( lm = 0; lm < cols; lm += BOX_WIDTH + 1 )
-		for ( tm = LOGO_HEIGHT; tm < rows; tm += BOX_HEIGHT )
-			box_new ( &box_first, lm, tm );
+	short left_margin = box_init ( &box_first );
+
 	/* Lights */
 	struct light midi_light, sysex_light, ctrl_light;
-	init_light ( &midi_light, "MIDI IN", &fhctrl->gui.midi_in, lm, TOP );
-	init_light ( &sysex_light, "SYSEX IN", &fhctrl->gui.sysex_midi_in, lm + 10, TOP );
-	init_light ( &ctrl_light, "CTRL IN", &fhctrl->gui.ctrl_midi_in, lm + 21, TOP );
+	init_light ( &midi_light, "MIDI IN", &fhctrl->gui.midi_in, left_margin, TOP );
+	init_light ( &sysex_light, "SYSEX IN", &fhctrl->gui.sysex_midi_in, left_margin + 10, TOP );
+	init_light ( &ctrl_light, "CTRL IN", &fhctrl->gui.ctrl_midi_in, left_margin + 21, TOP );
 
 	/* CPU usage */
 	CDKSLIDER *cpu_usage = newCDKSlider (
-		cdkscreen, lm - 1, 1, "DSP LOAD [%]", "",
+		cdkscreen, left_margin - 1, 1, "DSP LOAD [%]", "",
 		A_REVERSE|' ', SONGWIN_WIDTH, 0, 0, 100, 1, 10, TRUE, FALSE
 	);
 	
 	/* Create Song List */
-	song_list = newCDKScroll (
-		cdkscreen, lm, LOGO_HEIGHT, RIGHT, SONGWIN_HEIGHT, SONGWIN_WIDTH,
+	CDKSCROLL *song_list = newCDKScroll (
+		cdkscreen, left_margin, LOGO_HEIGHT, RIGHT, SONGWIN_HEIGHT, SONGWIN_WIDTH,
 		"</U/63>Select song:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
 	);
-	refresh_song_list ( fhctrl->songs );
+	refresh_song_list ( song_list, fhctrl->songs );
 
 	/* Log window */
-	CDKSWINDOW *short_log = init_log_win ( lm, LOGO_HEIGHT+SONGWIN_HEIGHT );
+	CDKSWINDOW *short_log = init_log_win ( left_margin, LOGO_HEIGHT+SONGWIN_HEIGHT );
 
 	/* Foot */
-	mesg[0] ="</32> q - quit, s - set song, n - new song, u - update song, g - change song name, i - send ident request, w - write config";
-	mesg[1] = "</32> e - edit, l - show full log";
-	CDKLABEL* foot = newCDKLabel (cdkscreen, LEFT, BOTTOM, mesg, 2, FALSE, FALSE);
-	drawCDKLabel(foot, TRUE);
+	CDKLABEL* foot = init_foot ( LEFT, BOTTOM );
 
-	/* Configure keyboard on top_logo */
+	/* Configure keyboard ( bind to top_logo ) */
 	noecho();
 	filter();
 	wtimeout(top_logo->win, 300);
-//	bindCDKObject(vSCROLL, song_list, 'q', kurwa_jebana, NULL);
-//	cbreak();
 
 	/* Main loop */
+	bool need_redraw = true;
 	while ( true ) {
-		// Bind FSTPlug's to our boxes
-		FSTPlug *fp;
-		struct box* box;
-		for ( fp = fst_next(fst,NULL), box = box_first;
-		      fp && box;
-		      fp = fst_next(fst,fp), box = box->next
-		) {
-			if ( fp->change || box->fstid != fp->id ) {
-				fp->change = false;
-				fhctrl->gui.lcd_need_update = true;
-				box_update ( box, fp );
-			}
-		}
+		if ( box_bind_to_fst ( box_first, fhctrl->fst ) )
+			fhctrl->gui.lcd_need_update = true;
 
 		fhctrl_idle ( fhctrl );
 
@@ -426,7 +440,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 		handle_light ( &ctrl_light );
 		handle_light ( &sysex_light );
 
-		handle_slider ( cpu_usage, cpu_load( fhctrl ) );
+		handle_slider ( cpu_usage, cpu_load ( fhctrl ) );
 
 		// Redraw
 		if (need_redraw) {
@@ -434,6 +448,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 			drawCDKLabel(top_logo, TRUE);
 			drawCDKScroll(song_list, TRUE);
 			drawCDKSwindow ( short_log, TRUE );
+			struct box* box;
 			for (box=box_first; box; box=box->next )
 				drawCDKLabel(box->label, TRUE);
 			drawCDKSlider(cpu_usage, FALSE);
@@ -441,9 +456,9 @@ void nfhc ( FHCTRL* fhctrl ) {
 //			refreshCDKScreen(cdkscreen);
 		}
 
-		short r;
 		int c = wgetch(top_logo->win);
 		switch (c) {
+			short r;
 			case 'q': goto cleanup;
 		 	case 's': // Set Song
 				setCDKScrollHighlight(song_list, A_REVERSE);
@@ -454,26 +469,26 @@ void nfhc ( FHCTRL* fhctrl ) {
 			case 'u': // Update Song
 				setCDKScrollHighlight(song_list, A_REVERSE);
 				r = activateCDKScroll(song_list, NULL);
-				song_update( song_get( fhctrl->songs, r), fst );
+				song_update( song_get( fhctrl->songs, r), fhctrl->fst );
 				setCDKScrollHighlight (song_list, A_NORMAL);
 				break;
 			case 'i': send_ident_request( fhctrl ); break;
 			case 'n':
 				need_redraw = true;
-				Song *song = song_new (fhctrl->songs, fst);
-				change_song_name ( fhctrl->songs, song );
+				Song *song = song_new (fhctrl->songs, fhctrl->fst);
+				change_song_name ( song_list, fhctrl->songs, song );
 				break;
 			case 'g':
 				need_redraw = true;
 				r = getCDKScrollCurrent ( song_list );
-				change_song_name ( fhctrl->songs, song_get ( fhctrl->songs, r ) );
+				change_song_name ( song_list, fhctrl->songs, song_get ( fhctrl->songs, r ) );
 				break;
 			case 'w': update_config( fhctrl ); break; // Update config file
 			case 'e': edit_selector (fhctrl); need_redraw = true; break;
 			case 'l': show_log(); need_redraw = true; break;
 			case 'r': ;
 //			case KEY_RESIZE:
-				int rows, cols;
+				int rows, cols, lm, tm;
 				getmaxyx ( cdkscreen->window, rows, cols );
 				cols -= SONGWIN_WIDTH + BOX_WIDTH + 1;
 				rows -= LOGO_HEIGHT + BOX_HEIGHT;
