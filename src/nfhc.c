@@ -13,8 +13,7 @@
 #include "fhctrl.h"
 #include "log.h"
 
-#define RIGHT_MARGIN	80	/* Where the infoboxes start */
-#define TOP_MARGIN	5	/* How much space is reserved for the logo */
+#define LOGO_HEIGHT	5	/* How much space is reserved for the logo */
 #define SONGWIN_WIDTH	42	/* Song window width */
 #define SONGWIN_HEIGHT	24	/* Song window height */
 #define BOX_WIDTH	38	/* Label Box width */
@@ -35,6 +34,7 @@ struct light {
 
 CDKSCREEN* cdkscreen;
 CDKSCROLL *song_list;
+
 int get_status_color ( FSTPlug* fp ) {
 	switch ( fp->state->state ) {
 		case FST_STATE_BYPASS: return 58;
@@ -52,6 +52,7 @@ int get_status_color ( FSTPlug* fp ) {
 
 void nLOG ( char *msg, void *user_data ) {
 	CDKSWINDOW *short_log = (CDKSWINDOW*) user_data;
+	if ( ! short_log ) return;
 
 	addCDKSwindow ( short_log, msg, BOTTOM );
 }
@@ -242,7 +243,7 @@ void box_cleanup ( struct box** first ) {
 		i++;
 	}
 	*first = NULL;
-	LOG ( "DESTROY %d", i );
+//	LOG ( "DESTROY %d", i );
 }
 
 void handle_slider ( CDKSLIDER *slider, int new_value ) {
@@ -291,6 +292,7 @@ struct box* box_new ( struct box** first, int x, int y ) {
 	}
 
 	new->next = NULL;
+	new->fstid = 0;
 
 	return new;
 }
@@ -304,6 +306,34 @@ CDKLABEL* init_logo ( int x, int y ) {
 	mesg[4] ="</56>  \\/_/     \\/_/\\/_/   \\/_____/     \\/_/   \\/_/ /_/   \\/_____/ done by Xj / Blj";
 	CDKLABEL* logo = newCDKLabel (cdkscreen, x, y, mesg, 5, FALSE, FALSE);
 	return logo;
+}
+
+CDKSWINDOW* init_log_win ( int x, int y ) {
+	CDKSWINDOW *sw = newCDKSwindow ( cdkscreen, x, y, 7, SONGWIN_WIDTH + 1, NULL, 10, TRUE, FALSE);
+	set_logcallback ( nLOG, sw );
+	return sw;
+}
+
+void move_log_win ( CDKSWINDOW** sw, int x, int y ) {
+	set_logcallback ( NULL, NULL );
+
+	int lines;
+	chtype** info = getCDKSwindowContents ( *sw, &lines );
+	char* info2[lines];
+	short i;
+	for ( i = 0; i < lines; i++ )
+		info2[i] = chtype2Char ( info[i] );
+
+	freeChtypeList ( info, lines );
+	destroyCDKSwindow ( *sw );
+
+	CDKSWINDOW* newsw = newCDKSwindow ( cdkscreen, x, y, 7, SONGWIN_WIDTH + 1, NULL, 10, TRUE, FALSE);
+	setCDKSwindowContents ( newsw, info2, lines );
+	freeCharList ( info2, lines );
+
+	*sw = newsw;
+
+	set_logcallback ( nLOG, newsw );
 }
 
 void nfhc ( FHCTRL* fhctrl ) {
@@ -332,7 +362,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 	struct box* box_first = NULL;
 	short lm, tm;
 	for ( lm = 0; lm < cols; lm += BOX_WIDTH + 1 )
-		for ( tm = TOP_MARGIN; tm < rows; tm += BOX_HEIGHT )
+		for ( tm = LOGO_HEIGHT; tm < rows; tm += BOX_HEIGHT )
 			box_new ( &box_first, lm, tm );
 	/* Lights */
 	struct light midi_light, sysex_light, ctrl_light;
@@ -348,15 +378,13 @@ void nfhc ( FHCTRL* fhctrl ) {
 	
 	/* Create Song List */
 	song_list = newCDKScroll (
-		cdkscreen, lm, TOP_MARGIN, RIGHT, SONGWIN_HEIGHT, SONGWIN_WIDTH,
+		cdkscreen, lm, LOGO_HEIGHT, RIGHT, SONGWIN_HEIGHT, SONGWIN_WIDTH,
 		"</U/63>Select song:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
 	);
 	refresh_song_list ( fhctrl->songs );
 
 	/* Log window */
-	CDKSWINDOW *short_log = newCDKSwindow ( cdkscreen, lm, TOP_MARGIN+SONGWIN_HEIGHT, 7,
-		SONGWIN_WIDTH + 1, NULL, 10, TRUE, FALSE);
-	set_logcallback ( nLOG, short_log );
+	CDKSWINDOW *short_log = init_log_win ( lm, LOGO_HEIGHT+SONGWIN_HEIGHT );
 
 	/* Foot */
 	mesg[0] ="</32> q - quit, s - set song, n - new song, u - update song, g - change song name, i - send ident request, w - write config";
@@ -405,7 +433,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 				drawCDKLabel(box->label, TRUE);
 			drawCDKSlider(cpu_usage, FALSE);
 			drawCDKLabel(foot, TRUE);
-			refreshCDKScreen(cdkscreen);
+//			refreshCDKScreen(cdkscreen);
 		}
 
 		short r;
@@ -439,23 +467,26 @@ void nfhc ( FHCTRL* fhctrl ) {
 			case 'e': edit_selector (fhctrl); need_redraw = true; break;
 			case 'l': show_log(); need_redraw = true; break;
 			case 'r':
-			case KEY_RESIZE:
-				LOG ( "Resize" );
+			case KEY_RESIZE: ;
+//				LOG ( "Resize" );
 				int rows, cols;
 				getmaxyx ( cdkscreen->window, rows, cols );
-				cols -= SONGWIN_WIDTH + 1 + BOX_WIDTH;
-				rows -= 5 + BOX_HEIGHT;
+				cols -= SONGWIN_WIDTH + BOX_WIDTH + 1;
+				rows -= LOGO_HEIGHT + BOX_HEIGHT;
 				struct box* box = box_first;
 				for ( lm = 0; lm < cols; lm += BOX_WIDTH + 1 ) {
-					for ( tm = TOP_MARGIN; tm < rows; tm += BOX_HEIGHT ) {
+					for ( tm = LOGO_HEIGHT; tm < rows; tm += BOX_HEIGHT ) {
 						box = box->next;
 						if ( ! box ) box = box_new ( &box_first, lm, tm );
+						moveCDKLabel ( box->label, lm, tm, FALSE, FALSE );
 					}
 				}
 				if ( box->next ) box_cleanup ( &(box->next) );
-				moveCDKScroll ( song_list, lm, TOP_MARGIN, FALSE, FALSE);
-				moveCDKSwindow ( short_log, lm, TOP_MARGIN+SONGWIN_HEIGHT, FALSE, FALSE);
-				moveCDKLabel ( foot, LEFT, BOTTOM, FALSE, FALSE);
+				moveCDKScroll ( song_list, lm, LOGO_HEIGHT, FALSE, FALSE );
+				// FIXME: this have bug:
+				//moveCDKSwindow ( short_log, lm, LOGO_HEIGHT+SONGWIN_HEIGHT, FALSE, FALSE);
+				move_log_win ( &short_log, lm, LOGO_HEIGHT+SONGWIN_HEIGHT );
+				moveCDKLabel ( foot, LEFT, BOTTOM, FALSE, FALSE );
 				need_redraw = true;
 				break;
 		}

@@ -398,6 +398,8 @@ void fhctrl_init( FHCTRL* fhctrl, void* user_ptr ) {
 }
 
 int main (int argc, char* argv[]) {
+	log_init ();
+
 	FHCTRL fhctrl = (FHCTRL) {0};
 	FJACK fjack = (FJACK) {0};
 

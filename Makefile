@@ -7,7 +7,7 @@ CFLAGS_APP += $(shell pkg-config --cflags $(PKG_CONFIG_MODULES))
 CFLAGS_APP += -I/usr/include/cdk
 
 LIBRARIES := $(shell pkg-config --libs $(PKG_CONFIG_MODULES))
-LIBRARIES += -lcdk
+LIBRARIES += -lcdk -lpthread
 
 DESTDIR =
 BINDIR = usr/bin
