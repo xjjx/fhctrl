@@ -42,7 +42,7 @@ typedef struct {
 
 jack_client_t *client;
 
-void usage(char *program_name) {
+void usage (char *program_name) {
 	fprintf(stderr, "usage: %s quit|save [path]\n", program_name);
 	exit(9);
 }
