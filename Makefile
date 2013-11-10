@@ -12,10 +12,9 @@ LIBRARIES += -lcdk -lpthread
 DESTDIR =
 BINDIR = usr/bin
 
-
 .PHONY: all,clean
 
-all: fhctrl sn lsp connect
+all: fhctrl sn lsp connect chuj
 
 $(APP): src/nfhc.c src/config.c src/ftdilcd.c src/basics.c src/fjack.c src/fhctrl.c src/log.c src/lcd.c
 	$(CC) $(CFLAGS_APP) -o $@ $^ $(LIBRARIES)
@@ -34,6 +33,9 @@ colors: unused/colors.c
 
 test: unused/test.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack
+
+chuj: unused/chuj.c
+	$(CC) $(CFLAGS_APP) -o $@ $^ $(LIBRARIES)
 
 transport: transport.c
 	$(CC) $(CFLAGS) -o $(APP)_$@ $^ -ljack -lreadline
