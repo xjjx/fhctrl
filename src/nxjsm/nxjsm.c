@@ -106,7 +106,7 @@ void refresh_applist ( CDKSCROLL* applist, JSList* list ) {
 	for ( l = list; l; l = jack_slist_next(l) ) {
 		app_t* app = l->data;
 
-		snprintf ( chuj, sizeof chuj, "%s (PID: %d): %s", app->cmd, app->pid, (app->ready) ? "READY":"WORKING" );
+		snprintf ( chuj, sizeof chuj, "%-60s (PID: %d): </32>%s<!32>", app->cmd, app->pid, (app->ready) ? "READY":"WORKING" );
 		addCDKScrollItem ( applist, chuj );
 	}
 	drawCDKScroll ( applist, TRUE );
@@ -204,7 +204,7 @@ void refresh_conlist ( CDKSCROLL* conlist, JSList* list, jack_client_t* client )
 		connection_t* con = l->data;
 
 		bool connected = check_con ( con, client );
-		snprintf ( chuj, sizeof chuj, "%s -> %s (%s)", con->src, con->dst, (connected)?"CONNECTED":"WAIT" );
+		snprintf ( chuj, sizeof chuj, "%-28s -> %-28s (</32>%s<!32>)", con->src, con->dst, (connected)?"CONNECTED":"WAIT" );
 		addCDKScrollItem ( conlist, chuj );
 	}
 	drawCDKScroll ( conlist, TRUE );
@@ -241,8 +241,10 @@ bool read_config ( const char* config_file, JSList** app_list, JSList** con_list
 	config_t cfg;
 	config_init(&cfg);
 
-	if ( !config_read_file(&cfg, config_file) )
+	if ( !config_read_file(&cfg, config_file) ) {
+		fprintf ( stderr, "%s | LINE: %d\n", config_error_text(&cfg), config_error_line(&cfg) );
 		goto read_config_return;
+	}
 
 	config_setting_t* root = config_root_setting ( &cfg );
 	if ( ! root ) goto read_config_return; // WTF ?
