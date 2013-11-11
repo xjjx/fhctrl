@@ -340,7 +340,7 @@ int main ( int argc, char *argv[] ) {
 
 	int rows, cols;
 	getmaxyx ( cdkscreen->window, rows, cols );
-	cols = cols; // fix warning
+	rows = rows; // fix warning
 
 	/* Disable cursor */
 	curs_set(0);
@@ -348,15 +348,19 @@ int main ( int argc, char *argv[] ) {
 	/* Start CDK Colors */
 	initCDKColor();
 
+	/* Head */
+	char* mesg[1] = { "<C></40>Nurses Xj Session Manager<!40>" };
+        CDKLABEL* head = newCDKLabel ( cdkscreen, CENTER, TOP, mesg, 1, FALSE, FALSE );
+
 	/* Create APP list */
 	CDKSCROLL *applist = newCDKScroll (
-		cdkscreen, LEFT, TOP, RIGHT, 0, 44,
+		cdkscreen, LEFT, 1, RIGHT, -1, 44,
 		"</U/63>APPLICATIONS list:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
 	);
 
 	/* Create connections list */
 	CDKSCROLL *conlist = newCDKScroll (
-		cdkscreen, RIGHT, TOP, RIGHT, 0, cols - 44 - 2,
+		cdkscreen, RIGHT, 1, RIGHT, -1, cols - 44 - 2,
 		"</U/63>CONNECTIONS list:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
 	);
 
@@ -388,6 +392,7 @@ int main ( int argc, char *argv[] ) {
 			restore_connections ( con_list, client );
 			refresh_conlist ( conlist, con_list, client );
 		}
+		drawCDKLabel ( head, FALSE );
 
 		sleep ( 1 );
 	}
@@ -404,6 +409,7 @@ int main ( int argc, char *argv[] ) {
 		free_con ( c );
 	}
 
+	destroyCDKLabel ( head );
 	destroyCDKScroll ( applist );
 	destroyCDKScroll ( conlist );
 	destroyCDKScreen ( cdkscreen );
