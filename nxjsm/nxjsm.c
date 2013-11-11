@@ -5,17 +5,22 @@
 #include <sys/wait.h>
 
 #include <jack/jack.h>
+#include <jack/jslist.h>
 #include <jack/session.h>
+
+#include <libconfig.h>
 
 #include <cdk.h>
 
-#define CH 10
-#define CC 3
+static volatile bool quit = false;
+void signal_handler (int sig) { quit = true; }
+void jack_shutdown (void *arg) { quit = true; }
 
 typedef struct {
 	pid_t pid;
 	bool ready;
-	char cmd[256];
+	char* dir;
+	char* cmd;
 } app_t;
 
 typedef struct {
@@ -23,22 +28,51 @@ typedef struct {
         char *dst;
 } connection_t;
 
-static volatile bool quit = false;
-void signal_handler (int sig) { quit = true; }
+app_t* new_app ( const char* dir, const char* cmd ) {
+//	printf ( "APP: DIR: %s | CMD: %s\n", dir, cmd );
+	app_t* new = malloc ( sizeof(app_t) );
+	new->dir = strdup ( dir );
+	new->cmd = strdup ( cmd );
+	new->pid = 0;
+	new->ready = true;
+	return new;
+}
 
-void jack_shutdown (void *arg) { quit = true; }
+void free_app ( app_t* a ) {
+	free ( a->dir );
+	free ( a->cmd );
+	free ( a );
+}
 
-int run_cmd ( char* cmd ) {
-	execlp ( "sh", "sh", "-c", cmd, NULL );
+connection_t* new_con ( const char *src, const char *dst ) {
+//	printf ( "CON: %s -> %s\n", src, dst );
+        connection_t* new = malloc( sizeof(connection_t) );
+        new->src = strdup ( src );
+        new->dst = strdup ( dst );
+        return new;
+}
+
+void free_con ( connection_t *c ) {
+        free(c->src);
+        free(c->dst);
+        free(c);
+}
+
+int run_app ( app_t* app ) {
+	setenv ( "SESSION_DIR", app->dir, 1 );
+	execlp ( "sh", "sh", "-c", app->cmd, NULL );
 	return 1;
 }
 
-void refresh_applist ( CDKSCROLL* applist, app_t* app, int num ) {
+void refresh_applist ( CDKSCROLL* applist, JSList* list ) {
+	JSList* l;
+	char chuj[256];
+
 	setCDKScrollItems ( applist, NULL, 0, 0 );
-	int i;
-	for ( i = 0; i < num; i++ ) {
-		char chuj[256];
-		snprintf ( chuj, sizeof chuj, "%s (PID: %d): %s", app[i].cmd, app[i].pid, (app[i].ready) ? "READY":"WORKING" );
+	for ( l = list; l; l = jack_slist_next(l) ) {
+		app_t* app = l->data;
+
+		snprintf ( chuj, sizeof chuj, "%s (PID: %d): %s", app->cmd, app->pid, (app->ready) ? "READY":"WORKING" );
 		addCDKScrollItem ( applist, chuj );
 	}
 	drawCDKScroll ( applist, TRUE );
@@ -127,13 +161,16 @@ bool check_con ( connection_t* con, jack_client_t* client ) {
 	return false;
 }
 
-void refresh_conlist ( CDKSCROLL* conlist, connection_t* con, int num, jack_client_t* client ) {
+void refresh_conlist ( CDKSCROLL* conlist, JSList* list, jack_client_t* client ) {
+	JSList* l;
+	char chuj[256];
+
 	setCDKScrollItems ( conlist, NULL, 0, 0 );
-	int i;
-	for ( i = 0; i < num; i++ ) {
-		bool connected = check_con ( &con[i], client );
-		char chuj[256];
-		snprintf ( chuj, sizeof chuj, "%s -> %s (%s)", con[i].src, con[i].dst, (connected)?"CONNECTED":"WAIT" );
+	for ( l = list; l; l = jack_slist_next(l) ) {
+		connection_t* con = l->data;
+
+		bool connected = check_con ( con, client );
+		snprintf ( chuj, sizeof chuj, "%s -> %s (%s)", con->src, con->dst, (connected)?"CONNECTED":"WAIT" );
 		addCDKScrollItem ( conlist, chuj );
 	}
 	drawCDKScroll ( conlist, TRUE );
@@ -142,14 +179,15 @@ void refresh_conlist ( CDKSCROLL* conlist, connection_t* con, int num, jack_clie
 int graph_cb_handler ( void *arg ) {
 	bool* graph_changed = (bool*) arg;
 	*graph_changed = true;
-
         return 0;
 }
 
-void restore_connections ( connection_t* con, int num, jack_client_t* client ) {
-	int i;
-	for ( i = 0; i < num; i++ ) {
-		bool connected = check_con ( &con[i], client );
+void restore_connections ( JSList* list, jack_client_t* client ) {
+	JSList* l;
+	for ( l = list; l; l = jack_slist_next(l) ) {
+		connection_t* con = l->data;
+
+		bool connected = check_con ( con, client );
 		if ( connected ) continue;
 
 		/* Can not pass name directly because of uuid mapping */
@@ -163,8 +201,60 @@ void restore_connections ( connection_t* con, int num, jack_client_t* client ) {
 	}
 }
 
+enum NodeType { APP = 0, CON = 1 };
+bool read_config ( const char* config_file, JSList** app_list, JSList** con_list ) {
+	bool ret = false;
+	config_t cfg;
+	config_init(&cfg);
+
+	if ( !config_read_file(&cfg, config_file) )
+		goto read_config_return;
+
+	config_setting_t* root = config_root_setting ( &cfg );
+	if ( ! root ) goto read_config_return; // WTF ?
+
+	int i;
+	for ( i=0; i < config_setting_length (root); i++ ) {
+		config_setting_t* node = config_setting_get_elem ( root, i );
+
+		int type;
+		if ( config_setting_lookup_int ( node, "type", &type ) != CONFIG_TRUE )
+			continue;
+
+		const char *dir , *cmd, *src, *dst;
+		switch ( type ) {
+		case APP:
+			config_setting_lookup_string ( node, "dir", &dir );
+			config_setting_lookup_string ( node, "cmd", &cmd );
+
+			/* Append new app */
+			app_t* a = new_app ( dir, cmd );
+			*app_list = jack_slist_append ( *app_list, a );
+			break;
+		case CON:
+			config_setting_lookup_string ( node, "src", &src );
+			config_setting_lookup_string ( node, "dst", &dst );
+
+			/* Append new connection */
+			connection_t* c = new_con ( src, dst );
+			*con_list = jack_slist_append ( *con_list, c );
+			break;
+		}
+	}
+	ret = true;
+
+read_config_return:
+	config_destroy(&cfg);
+	return ret;
+}
+
 int main (int argc, char *argv[]) {
-	bool graph_changed = true;
+	JSList* app_list = NULL;
+	JSList* con_list = NULL;
+	if ( ! read_config ( argv[1], &app_list, &con_list ) ) {
+		printf ( "Read config error\n" );
+		return 1;
+	}
 
 	/* init jack */
 	jack_client_t* client = jack_client_open ( "CHUJ" , JackNullOption, NULL);
@@ -172,8 +262,11 @@ int main (int argc, char *argv[]) {
 		fprintf(stderr, "JACK server not running?\n");
 		return 1;
 	}
+
+	bool graph_changed = true;
         jack_set_graph_order_callback (client, graph_cb_handler, &graph_changed);
 	jack_on_shutdown ( client, jack_shutdown, 0 );
+
 	jack_activate ( client );
 
 	/* Initialize the Cdk screen.  */
@@ -185,9 +278,6 @@ int main (int argc, char *argv[]) {
 
 	/* Start CDK Colors */
 	initCDKColor();
-
-	app_t app[CH];
-	connection_t con[CC];
 
 	/* Create APP list */
 	CDKSCROLL *applist = newCDKScroll (
@@ -206,47 +296,45 @@ int main (int argc, char *argv[]) {
 	signal(SIGHUP, signal_handler);
 	signal(SIGINT, signal_handler);
 
-
-	/* Init APP */
-	int i;
-	for ( i = 0; i < CH; i++ ) {
-		snprintf ( app[i].cmd, sizeof app[i].cmd, "sleep %d", i + 3 );
-		app[i].pid = 0;
-		app[i].ready = true;
-	}
-
-	/* Init connections */
-	for ( i = 0; i < CC; i++ ) {
-		con[i].src = "system:capture_1";
-		con[i].dst = "system:playback_1";
-	}
-
 	while ( ! quit ) {
-		for ( i = 0; i < CH; i++ ) {
-			if ( app[i].ready ) {
+		JSList* l;
+		for ( l = app_list; l; l = jack_slist_next(l) ) {
+			app_t* app = l->data;
+
+			if ( app->ready ) {
 				pid_t p = fork();
 				if ( p == 0 ) { // Child
-					return run_cmd ( app[i].cmd );
+					return run_app ( app );
 				} else if ( p < 0 ) { // FORK FAIL // Parent
-					app[i].pid = 0;
+					app->pid = 0;
 				} else { // p > 0 // Parent
-					app[i].pid = p;
+					app->pid = p;
 				}
-				app[i].ready = false;
+				app->ready = false;
 			}
-			
-			app_wait ( &app[i] );
+			app_wait ( app );
 		}
-		refresh_applist ( applist, app, CH );
+		refresh_applist ( applist, app_list );
 		if ( graph_changed ) {
-			restore_connections ( con, CC, client );
-			refresh_conlist ( conlist, con, CC, client );
+			restore_connections ( con_list, client );
+			refresh_conlist ( conlist, con_list, client );
 		}
 
 		sleep ( 1 );
 	}
 
 	/* Cleanup */
+	JSList* l;
+	for ( l = app_list; l; l = jack_slist_next(l) ) {
+		app_t *a = l->data;
+		free_app ( a );
+	}
+
+	for ( l = con_list; l; l = jack_slist_next(l) ) {
+		connection_t *c = l->data;
+		free_con ( c );
+	}
+
 	destroyCDKScroll ( applist );
 	destroyCDKScroll ( conlist );
 	destroyCDKScreen ( cdkscreen );
