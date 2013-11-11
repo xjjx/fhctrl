@@ -13,6 +13,7 @@
 #include <cdk.h>
 
 #define SESFILE "session.cfg"
+#define APPNAME "nXjSM"
 
 static volatile bool quit = false;
 void signal_handler (int sig) { quit = true; }
@@ -33,7 +34,16 @@ typedef struct {
 app_t* new_app ( const char* dir, const char* cmd ) {
 //	printf ( "APP: DIR: %s | CMD: %s\n", dir, cmd );
 	app_t* new = malloc ( sizeof(app_t) );
-	new->dir = strdup ( dir );
+
+	/* Proper dir require trailing slash */
+	int len = strlen ( dir );
+	if ( dir[len - 1] == '/' ) {
+		new->dir = strdup ( dir );
+	} else {
+		new->dir = malloc ( len + 2 );
+		snprintf ( new->dir, len + 2, "%s/", dir );
+	}
+
 	new->cmd = strdup ( cmd );
 	new->pid = 0;
 	new->ready = true;
@@ -250,14 +260,13 @@ read_config_return:
 	return ret;
 }
 
-int main (int argc, char *argv[]) {
-	const char* session_dir = argv[1];
-
+int main ( int argc, char *argv[] ) {
 	if ( argc < 2 ) {
 		fprintf ( stderr, "Usage: %s <session_dir>\n", argv[0] );
 		return 1;
 	}
 
+	const char* session_dir = argv[1];
 	if ( chdir ( session_dir ) != 0 ) {
 		perror ( "Error:" );
 		return 1;
@@ -266,14 +275,14 @@ int main (int argc, char *argv[]) {
 	JSList* app_list = NULL;
 	JSList* con_list = NULL;
 	if ( ! read_config ( SESFILE, &app_list, &con_list ) ) {
-		printf ( "Read config error\n" );
+		fprintf ( stderr, "Read config error\n" );
 		return 1;
 	}
 
 	/* init jack */
-	jack_client_t* client = jack_client_open ( "CHUJ" , JackNullOption, NULL);
+	jack_client_t* client = jack_client_open ( APPNAME, JackNullOption, NULL);
 	if ( client == 0 ) {
-		fprintf(stderr, "JACK server not running?\n");
+		fprintf ( stderr, "JACK server not running?\n" );
 		return 1;
 	}
 
