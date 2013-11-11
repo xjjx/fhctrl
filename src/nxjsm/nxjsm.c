@@ -15,6 +15,7 @@
 #define APPNAME "nXjSM"
 #define SESFILE "session.cfg"
 #define LOGDIR "/tmp"
+#define DEFAULT_XTERM "xterm -e"
 
 static volatile bool quit = false;
 void signal_handler (int sig) { quit = true; }
@@ -91,6 +92,7 @@ int run_app ( app_t* app ) {
 	dup2(fd, STDERR_FILENO);	// make stderr go to file
 	close ( fd );	// fd no longer needed - the dup'ed handles are sufficient
 
+	setenv ( "XTERM", DEFAULT_XTERM, 0 ); // Default XTERM
 	setenv ( "SESSION_DIR", app->dir, 1 );
 	execlp ( "sh", "sh", "-c", app->cmd, NULL );
 	return 1;
