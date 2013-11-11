@@ -12,8 +12,9 @@
 
 #include <cdk.h>
 
-#define SESFILE "session.cfg"
 #define APPNAME "nXjSM"
+#define SESFILE "session.cfg"
+#define LOGDIR "/tmp"
 
 static volatile bool quit = false;
 void signal_handler (int sig) { quit = true; }
@@ -24,6 +25,7 @@ typedef struct {
 	bool ready;
 	char* dir;
 	char* cmd;
+	char* log;
 } app_t;
 
 typedef struct {
@@ -43,11 +45,19 @@ char* proper_dir ( const char* dir ) {
 	}
 }
 
-app_t* new_app ( const char* dir, const char* cmd ) {
+char* get_log_path ( const char* dir, const char* name ) {
+	int len = strlen ( dir ) + strlen ( name ) + 1;
+	char* p = malloc ( len + 5 );
+	snprintf ( p, len + 5, "%s/%s.log", dir, name );
+	return p;
+}
+
+app_t* new_app ( const char* dir, const char* cmd, const char* name ) {
 //	printf ( "APP: DIR: %s | CMD: %s\n", dir, cmd );
 	app_t* new = malloc ( sizeof(app_t) );
 	new->dir = proper_dir ( dir );
 	new->cmd = strdup ( cmd );
+	new->log = get_log_path ( LOGDIR, name );
 	new->pid = 0;
 	new->ready = true;
 	return new;
@@ -56,6 +66,7 @@ app_t* new_app ( const char* dir, const char* cmd ) {
 void free_app ( app_t* a ) {
 	free ( a->dir );
 	free ( a->cmd );
+	free ( a->log );
 	free ( a );
 }
 
@@ -74,6 +85,12 @@ void free_con ( connection_t *c ) {
 }
 
 int run_app ( app_t* app ) {
+	FILE* f = fopen ( app->log, "wt" );
+	int fd = fileno ( f );
+	dup2(fd, STDOUT_FILENO);	// make stdout go to file
+	dup2(fd, STDERR_FILENO);	// make stderr go to file
+	close ( fd );	// fd no longer needed - the dup'ed handles are sufficient
+
 	setenv ( "SESSION_DIR", app->dir, 1 );
 	execlp ( "sh", "sh", "-c", app->cmd, NULL );
 	return 1;
@@ -236,14 +253,15 @@ bool read_config ( const char* config_file, JSList** app_list, JSList** con_list
 		if ( config_setting_lookup_int ( node, "type", &type ) != CONFIG_TRUE )
 			continue;
 
-		const char *dir , *cmd, *src, *dst;
+		const char *dir , *cmd, *name,*src, *dst;
 		switch ( type ) {
 		case APP:
 			config_setting_lookup_string ( node, "dir", &dir );
 			config_setting_lookup_string ( node, "cmd", &cmd );
+			config_setting_lookup_string ( node, "name", &name );
 
 			/* Append new app */
-			app_t* a = new_app ( dir, cmd );
+			app_t* a = new_app ( dir, cmd, name );
 			*app_list = jack_slist_append ( *app_list, a );
 			break;
 		case CON:
