@@ -198,13 +198,24 @@ bool check_con ( connection_t* con, jack_client_t* client ) {
 void refresh_conlist ( CDKSCROLL* conlist, JSList* list, jack_client_t* client ) {
 	JSList* l;
 	char chuj[256];
+	char srcbuf[29];
+	char dstbuf[29];
 
 	setCDKScrollItems ( conlist, NULL, 0, 0 );
 	for ( l = list; l; l = jack_slist_next(l) ) {
 		connection_t* con = l->data;
 
 		bool connected = check_con ( con, client );
-		snprintf ( chuj, sizeof chuj, "%-28s -> %-28s (</32>%s<!32>)", con->src, con->dst, (connected)?"CONNECTED":"WAIT" );
+
+		char *src = con->src;
+		if ( uuid2name ( client, con->src, srcbuf, sizeof srcbuf ) )
+			src = srcbuf;
+
+		char* dst = con->dst;
+		if ( uuid2name ( client, con->dst, dstbuf, sizeof dstbuf ) )
+			dst = dstbuf;
+
+		snprintf ( chuj, sizeof chuj, "%-28s -> %-28s (</32>%s<!32>)", src, dst, (connected)?"CONNECTED":"WAIT" );
 		addCDKScrollItem ( conlist, chuj );
 	}
 	drawCDKScroll ( conlist, TRUE );
