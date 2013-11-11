@@ -12,6 +12,8 @@
 
 #include <cdk.h>
 
+#define SESFILE "session.cfg"
+
 static volatile bool quit = false;
 void signal_handler (int sig) { quit = true; }
 void jack_shutdown (void *arg) { quit = true; }
@@ -249,9 +251,21 @@ read_config_return:
 }
 
 int main (int argc, char *argv[]) {
+	const char* session_dir = argv[1];
+
+	if ( argc < 2 ) {
+		fprintf ( stderr, "Usage: %s <session_dir>\n", argv[0] );
+		return 1;
+	}
+
+	if ( chdir ( session_dir ) != 0 ) {
+		perror ( "Error:" );
+		return 1;
+	}
+
 	JSList* app_list = NULL;
 	JSList* con_list = NULL;
-	if ( ! read_config ( argv[1], &app_list, &con_list ) ) {
+	if ( ! read_config ( SESFILE, &app_list, &con_list ) ) {
 		printf ( "Read config error\n" );
 		return 1;
 	}
