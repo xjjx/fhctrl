@@ -34,7 +34,7 @@ colors: unused/colors.c
 test: unused/test.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack
 
-nxjsm: nxjsm/nxjsm.c
+nxjsm: src/nxjsm/nxjsm.c
 	$(CC) $(CFLAGS_APP) -o $@ $^ $(LIBRARIES)
 
 transport: transport.c
@@ -44,7 +44,7 @@ inprocess: inprocess.c
 	$(CC) $(CFLAGS) -o $@ $^ -fPIC -shared -ljack
 
 clean:
-	rm -f $(APP) $(APP)_sn $(APP)_lsp $(APP)_connect $(APP)_transport colors test inprocess
+	rm -f $(APP) $(APP)_sn $(APP)_lsp $(APP)_connect $(APP)_transport colors test inprocess nxjsm
 
 install: all
 	install -Dm755 $(APP) $(DESTDIR)/$(BINDIR)/$(APP)
