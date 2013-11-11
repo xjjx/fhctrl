@@ -299,6 +299,10 @@ int main ( int argc, char *argv[] ) {
 	WINDOW *screen = initscr();
 	CDKSCREEN* cdkscreen = initCDKScreen (screen);
 
+	int rows, cols;
+	getmaxyx ( cdkscreen->window, rows, cols );
+	cols = cols; // fix warning
+
 	/* Disable cursor */
 	curs_set(0);
 
@@ -307,13 +311,13 @@ int main ( int argc, char *argv[] ) {
 
 	/* Create APP list */
 	CDKSCROLL *applist = newCDKScroll (
-		cdkscreen, LEFT, TOP, RIGHT, 15, 0,
+		cdkscreen, LEFT, TOP, RIGHT, rows/2, 0,
 		"</U/63>APPLICATIONS list:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
 	);
 
 	/* Create connections list */
 	CDKSCROLL *conlist = newCDKScroll (
-		cdkscreen, LEFT, 16, RIGHT, 15, 0,
+		cdkscreen, LEFT, rows/2, RIGHT, rows/2 + 1, 0,
 		"</U/63>CONNECTIONS list:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
 	);
 
