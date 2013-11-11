@@ -15,7 +15,8 @@
 #define APPNAME "nXjSM"
 #define SESFILE "session.cfg"
 #define LOGDIR "/tmp"
-#define DEFAULT_XTERM "xterm -e"
+#define DEFAULT_XTERM "xterm -geometry 132x43 -e"
+#define DEFAULT_FSTHOST_GUI "1"
 
 static volatile bool quit = false;
 void signal_handler (int sig) { quit = true; }
@@ -26,6 +27,7 @@ typedef struct {
 	bool ready;
 	char* dir;
 	char* cmd;
+	char* name;
 	char* log;
 } app_t;
 
@@ -58,6 +60,7 @@ app_t* new_app ( const char* dir, const char* cmd, const char* name ) {
 	app_t* new = malloc ( sizeof(app_t) );
 	new->dir = proper_dir ( dir );
 	new->cmd = strdup ( cmd );
+	new->name = strdup ( name );
 	new->log = get_log_path ( LOGDIR, name );
 	new->pid = 0;
 	new->ready = true;
@@ -67,6 +70,7 @@ app_t* new_app ( const char* dir, const char* cmd, const char* name ) {
 void free_app ( app_t* a ) {
 	free ( a->dir );
 	free ( a->cmd );
+	free ( a->name );
 	free ( a->log );
 	free ( a );
 }
@@ -93,6 +97,7 @@ int run_app ( app_t* app ) {
 	close ( fd );	// fd no longer needed - the dup'ed handles are sufficient
 
 	setenv ( "XTERM", DEFAULT_XTERM, 0 ); // Default XTERM
+	setenv ( "FSTHOST_GUI", DEFAULT_FSTHOST_GUI, 0 ); // Default FSTHOST_GUI
 	setenv ( "SESSION_DIR", app->dir, 1 );
 	execlp ( "sh", "sh", "-c", app->cmd, NULL );
 	return 1;
@@ -106,7 +111,8 @@ void refresh_applist ( CDKSCROLL* applist, JSList* list ) {
 	for ( l = list; l; l = jack_slist_next(l) ) {
 		app_t* app = l->data;
 
-		snprintf ( chuj, sizeof chuj, "%-60s (PID: %d): </32>%s<!32>", app->cmd, app->pid, (app->ready) ? "READY":"WORKING" );
+//		snprintf ( chuj, sizeof chuj, "%-60s (PID: %d): </32>%s<!32>", app->cmd, app->pid, (app->ready) ? "READY":"WORKING" );
+		snprintf ( chuj, sizeof chuj, "%-20s (PID: %d): </32>%s<!32>", app->name, app->pid, (app->ready) ? "READY":"WORKING" );
 		addCDKScrollItem ( applist, chuj );
 	}
 	drawCDKScroll ( applist, TRUE );
@@ -344,13 +350,13 @@ int main ( int argc, char *argv[] ) {
 
 	/* Create APP list */
 	CDKSCROLL *applist = newCDKScroll (
-		cdkscreen, LEFT, TOP, RIGHT, rows/2, 0,
+		cdkscreen, LEFT, TOP, RIGHT, 0, 44,
 		"</U/63>APPLICATIONS list:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
 	);
 
 	/* Create connections list */
 	CDKSCROLL *conlist = newCDKScroll (
-		cdkscreen, LEFT, rows/2, RIGHT, rows/2 + 1, 0,
+		cdkscreen, RIGHT, TOP, RIGHT, 0, cols - 44 - 2,
 		"</U/63>CONNECTIONS list:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
 	);
 
