@@ -31,19 +31,22 @@ typedef struct {
         char *dst;
 } connection_t;
 
+/* Proper dir require trailing slash */
+char* proper_dir ( const char* dir ) {
+	int len = strlen ( dir );
+	if ( dir[len - 1] == '/' ) {
+		return strdup ( dir );
+	} else {
+		char* d = malloc ( len + 2 );
+		snprintf ( d, len + 2, "%s/", dir );
+		return d;
+	}
+}
+
 app_t* new_app ( const char* dir, const char* cmd ) {
 //	printf ( "APP: DIR: %s | CMD: %s\n", dir, cmd );
 	app_t* new = malloc ( sizeof(app_t) );
-
-	/* Proper dir require trailing slash */
-	int len = strlen ( dir );
-	if ( dir[len - 1] == '/' ) {
-		new->dir = strdup ( dir );
-	} else {
-		new->dir = malloc ( len + 2 );
-		snprintf ( new->dir, len + 2, "%s/", dir );
-	}
-
+	new->dir = proper_dir ( dir );
 	new->cmd = strdup ( cmd );
 	new->pid = 0;
 	new->ready = true;
