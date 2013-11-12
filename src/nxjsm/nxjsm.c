@@ -318,7 +318,8 @@ int main ( int argc, char *argv[] ) {
 	bool wineserver = false;
 	if ( argc > 2 && !strcmp ( argv[2], "wine" ) ) wineserver = true;
 	if ( wineserver ) {
-		if ( system ( "wineserver -p" ) != 0 ) {
+		int r = system ( "wineserver -p" );
+		if ( r != 0 ) {
 			fprintf ( stderr, "wineserver -p return %d exit code\n", r );
 			return 1;
 		}
@@ -435,8 +436,8 @@ int main ( int argc, char *argv[] ) {
 	
 	if ( wineserver ) {
 		puts ( "Stop wineserver" );
-		if ( system ( "wineserver -k" ) != 0 )
-			fprintf ( stderr, "wineserver -k return %d exit code\n", r );
+		int r = system ( "wineserver -k" );
+		if ( r != 0 ) fprintf ( stderr, "wineserver -k return %d exit code\n", r );
 	}
 
 	puts ( "This was easy .." );
