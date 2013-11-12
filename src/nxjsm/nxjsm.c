@@ -112,7 +112,7 @@ void refresh_applist ( CDKSCROLL* applist, JSList* list ) {
 		app_t* app = l->data;
 
 //		snprintf ( chuj, sizeof chuj, "%-60s (PID: %d): </32>%s<!32>", app->cmd, app->pid, (app->ready) ? "READY":"WORKING" );
-		snprintf ( chuj, sizeof chuj, "%-20s (PID: %d): </32>%s<!32>", app->name, app->pid, (app->ready) ? "READY":"WORKING" );
+		snprintf ( chuj, sizeof chuj, "%-20s (PID: %6d): </32>%s<!32>", app->name, app->pid, (app->ready) ? "READY":"WORKING" );
 		addCDKScrollItem ( applist, chuj );
 	}
 	drawCDKScroll ( applist, TRUE );
@@ -314,6 +314,17 @@ int main ( int argc, char *argv[] ) {
 		return 1;
 	}
 
+	/* Start wineserver in persistent mode */
+	bool wineserver = false;
+	if ( argc > 2 && !strcmp ( argv[2], "wine" ) ) wineserver = true;
+	if ( wineserver ) {
+		int r = system ( "wineserver -p" );
+		if ( r != 0 ) {
+			fprintf ( stderr, "wineserver -p return %d exit code\n", r );
+			return 1;
+		}
+	}
+
 	JSList* app_list = NULL;
 	JSList* con_list = NULL;
 	if ( ! read_config ( SESFILE, &app_list, &con_list ) ) {
@@ -354,13 +365,13 @@ int main ( int argc, char *argv[] ) {
 
 	/* Create APP list */
 	CDKSCROLL *applist = newCDKScroll (
-		cdkscreen, LEFT, 1, RIGHT, -1, 44,
+		cdkscreen, LEFT, 1, RIGHT, -1, 46,
 		"</U/63>APPLICATIONS list:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
 	);
 
 	/* Create connections list */
 	CDKSCROLL *conlist = newCDKScroll (
-		cdkscreen, RIGHT, 1, RIGHT, -1, cols - 44 - 2,
+		cdkscreen, RIGHT, 1, RIGHT, -1, cols - 46 - 2,
 		"</U/63>CONNECTIONS list:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
 	);
 
@@ -422,6 +433,12 @@ int main ( int argc, char *argv[] ) {
 	puts ( "Close Jack" );
         jack_deactivate ( client );
         jack_client_close ( client );
+	
+	if ( wineserver ) {
+		puts ( "Stop wineserver" );
+		int r = system ( "wineserver -k" );
+		if ( r != 0 ) fprintf ( stderr, "wineserver -k return %d exit code\n", r );
+	}
 
 	puts ( "This was easy .." );
 
