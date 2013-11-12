@@ -108,7 +108,12 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 			switch ( fp->type ) {
 			case FST_TYPE_PLUGIN:
 				// For plugin type this mean set it to bypass
-				fp->state->state = FST_STATE_BYPASS;
+				// if plugin is already in BYPASS state then skip it
+				if ( fp->state->state == FST_STATE_BYPASS ) {
+					continue;
+				} else {
+					fp->state->state = FST_STATE_BYPASS;
+				}
 				break;
 			default: // For rest .. mean do nothing
 				continue;
@@ -127,7 +132,6 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 		} else {
 			fhctrl_fst_send ( fhctrl, fp, "SongSend" );
 		}
-
 		fp->change = true; // Update display
 	}
 }
