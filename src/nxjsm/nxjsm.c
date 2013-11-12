@@ -398,6 +398,16 @@ int main ( int argc, char *argv[] ) {
 	}
 
 	/* Cleanup */
+	destroyCDKLabel ( head );
+	destroyCDKScroll ( applist );
+	destroyCDKScroll ( conlist );
+	destroyCDKScreen ( cdkscreen );
+	endCDK();
+
+	puts ( "Wait for apps ..." );
+	while ( wait(NULL) > 0 );
+
+	puts ( "Cleanup" );
 	JSList* l;
 	for ( l = app_list; l; l = jack_slist_next(l) ) {
 		app_t *a = l->data;
@@ -409,16 +419,11 @@ int main ( int argc, char *argv[] ) {
 		free_con ( c );
 	}
 
-	destroyCDKLabel ( head );
-	destroyCDKScroll ( applist );
-	destroyCDKScroll ( conlist );
-	destroyCDKScreen ( cdkscreen );
-	endCDK();
-
+	puts ( "Close Jack" );
         jack_deactivate ( client );
         jack_client_close ( client );
 
-	puts ( "This was clean .." );
+	puts ( "This was easy .." );
 
 	return 0;
 }
