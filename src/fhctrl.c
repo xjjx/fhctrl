@@ -23,7 +23,6 @@
 #include "log.h"
 #include "sysex.h"
 
-
 #define CTRL_CHANNEL 15
 #define APP_NAME "FHControl"
 
@@ -120,9 +119,10 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 		}
 
 		// Send state to unit
-		if (curState == FST_NA) {
+		if (curState == FST_NA && fp->type != FST_TYPE_DEVICE) {
 			// If unit was NA then keep it state and skip sending
-			// NOTE: this is valid only for PLUGIN type units
+			// NOTE: non-sysex devices does not support NA state
+			//       cause they can't be discovered
 			fp->state->state = FST_NA;
 		} else {
 			fhctrl_fst_send ( fhctrl, fp, "SongSend" );
