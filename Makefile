@@ -1,13 +1,14 @@
 APP = fhctrl
 
-PKG_CONFIG_MODULES := jack ncurses libftdi libconfig
+#PKG_CONFIG_MODULES := jack ncurses libftdi libconfig
+PKG_CONFIG_MODULES := jack libftdi libconfig
 CFLAGS = -g -O2 -Wall -mfpmath=sse -msse2
 CFLAGS_APP = $(CFLAGS)
 CFLAGS_APP += $(shell pkg-config --cflags $(PKG_CONFIG_MODULES))
 CFLAGS_APP += -I/usr/include/cdk
 
 LIBRARIES := $(shell pkg-config --libs $(PKG_CONFIG_MODULES))
-LIBRARIES += -lcdk -lpthread
+LIBRARIES += -lcdk -lpthread -lncurses
 
 DESTDIR =
 BINDIR = usr/bin
