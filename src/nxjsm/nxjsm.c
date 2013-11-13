@@ -314,17 +314,6 @@ int main ( int argc, char *argv[] ) {
 		return 1;
 	}
 
-	/* Start wineserver in persistent mode */
-	bool wineserver = false;
-	if ( argc > 2 && !strcmp ( argv[2], "wine" ) ) wineserver = true;
-	if ( wineserver ) {
-		int r = system ( "wineserver -p" );
-		if ( r != 0 ) {
-			fprintf ( stderr, "wineserver -p return %d exit code\n", r );
-			return 1;
-		}
-	}
-
 	JSList* app_list = NULL;
 	JSList* con_list = NULL;
 	if ( ! read_config ( SESFILE, &app_list, &con_list ) ) {
@@ -434,12 +423,6 @@ int main ( int argc, char *argv[] ) {
         jack_deactivate ( client );
         jack_client_close ( client );
 	
-	if ( wineserver ) {
-		puts ( "Stop wineserver" );
-		int r = system ( "wineserver -k" );
-		if ( r != 0 ) fprintf ( stderr, "wineserver -k return %d exit code\n", r );
-	}
-
 	puts ( "This was easy .." );
 
 	return 0;
