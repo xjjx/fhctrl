@@ -36,7 +36,9 @@ typedef struct {
         char *dst;
 } connection_t;
 
-/* Proper dir require trailing slash */
+static void jack_log_silent(const char *msg) { return; }
+
+/* Proper session dir require trailing slash */
 char* proper_dir ( const char* dir ) {
 	int len = strlen ( dir );
 	if ( dir[len - 1] == '/' ) {
@@ -331,6 +333,8 @@ int main ( int argc, char *argv[] ) {
 	bool graph_changed = true;
         jack_set_graph_order_callback (client, graph_cb_handler, &graph_changed);
 	jack_on_shutdown ( client, jack_shutdown, 0 );
+        jack_set_info_function ( jack_log_silent );
+        jack_set_error_function ( jack_log_silent );
 
 	jack_activate ( client );
 
@@ -378,10 +382,10 @@ int main ( int argc, char *argv[] ) {
 				pid_t p = fork();
 				if ( p == 0 ) { // Child
 					return run_app ( app );
-				} else if ( p < 0 ) { // FORK FAIL // Parent
-					app->pid = 0;
-				} else { // p > 0 // Parent
+				} else if ( p > 0 ) { // Parent
 					app->pid = p;
+				} else { // p < 0 // FORK FAIL // Parent
+					app->pid = 0;
 				}
 				app->ready = false;
 			}
