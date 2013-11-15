@@ -50,7 +50,6 @@ clean:
 install: all
 	install -Dm755 $(APP) $(DESTDIR)/$(BINDIR)/$(APP)
 	install -Dm755 tools/xjsm $(DESTDIR)/$(BINDIR)/xjsm
-	install -Dm755 tools/start_nxjsm $(DESTDIR)/$(BINDIR)/start_nxjsm
 	install -Dm755 nxjsm $(DESTDIR)/$(BINDIR)/nxjsm
 	install -Dm755 nxjsm_save $(DESTDIR)/$(BINDIR)/nxjsm_save
 	install -Dm755 $(APP)_lsp $(DESTDIR)/$(BINDIR)/$(APP)_lsp

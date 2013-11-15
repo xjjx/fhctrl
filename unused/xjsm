@@ -5,7 +5,7 @@
 export VST_PATH="$HOME/VST:/usr/share/vst"
 export PATH=".:/home/xj/Muzyka/fsthost/trunk:$PATH"
 #export PATH="/home/studio/SVN/fhctrl:/media/bigpig/secure/XJ/lvst/fsthost/trunk:$PATH"
-export FSTHOST_GUI=0
+export FSTHOST_GUI=1
 export WINE_RT=${WINE_RT:-10}
 export WINE_SRV_RT=${WINE_SRV_RT:-15}
 
@@ -46,44 +46,44 @@ start_in_tmux() {
 	tmux new -d -x132 -y43 "$*"
 }
 
-check_jack() {
-	jack_wait -c 2>/dev/null | grep -q '^running'
-}
-
 start_jack() {
-	if check_jack; then
+	if ps -eo comm|grep -Fq 'jackd'; then
 		echo 'Jack Running'
-		return 0
+	else
+		if [ ! -r $HOME/.jackdrc ]; then
+			echo "No file $HOME/.jackdrc"
+			return 1
+		fi
+		(nohup sh -c ". $HOME/.jackdrc" >/tmp/jackd.$LOGNAME.log 2>&1 &)
+		sleep 5
 	fi
-
-	if [ ! -r $HOME/.jackdrc ]; then
-		echo "No file $HOME/.jackdrc"
-		return 1
-	fi
-	(nohup sh -c ". $HOME/.jackdrc" > /tmp/jackd.$LOGNAME.log 2>&1 &)
-	jack_wait -w
-
 	return 0
 }
 
-start_wine() {
-	echo 'Starting WineServer in persistent mode'
-	wineboot; EXC=$?
-	if [ $EXC -ne 0 ]; then
-		echo "Wineboot | EXC: $EXC"
+start_ses() {
+	SES_SCRIPT="${SES_PATH}/session.sh"
+
+	echo "Starting session: ${SES_PATH}"
+	if [ ! -r "$SES_SCRIPT" ]; then
+		echo "No file $SES_SCRIPT"
 		return 1
 	fi
-	wineserver -p; EXC=$?
-	if [ $EXC -ne 0 -a $EXC -ne 2 ]; then
-		echo "Wineserver | EXC: $EXC"
-		return 1
-	fi
-        return 0
+	GLOBAL_SESSION_DIR=${SES_PATH}/
+	. $SES_SCRIPT
+
+	jobs -l
+	wait
 }
 
-start_ses() {
-	echo "Starting session: ${SES_PATH}"
-	nxjsm "$SES_PATH" || return 1
+start_wine() {
+	if ps -eo comm|grep -Fq 'wineserver'; then
+		echo 'WineServer running'
+	else
+		echo 'Starting WineServer in persistent mode'
+		wineboot
+		wineserver -k
+		wineserver -p || return 1
+	fi
 	return 0
 }
 
@@ -109,7 +109,8 @@ ses_save() {
 
 	mkdir "${SES_PATH}"
 
-	if nxjsm_save save "${SES_PATH}"; then
+	if fhctrl_sn save "${SES_PATH}" > "${SES_PATH}/session.sh"; then
+		echo 'Session Saved'
 		ses_clean "${SES_PATH}.broken"
 		return 0
 	else
