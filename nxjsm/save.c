@@ -28,7 +28,8 @@
 
 #include <libconfig.h>
 
-#define SESFILE "session.cfg"
+#include "config.h"
+
 #define SKIP_MIDI 1
 
 typedef struct {
@@ -46,7 +47,8 @@ enum NodeType { APP = 0, CON = 1 };
 jack_client_t *client;
 
 void usage (char *program_name) {
-	fprintf(stderr, "usage: %s quit|save [path]\n", program_name);
+	fprintf(stderr, "%s (save) | Version: %s\n", APPNAME, VERSION);
+	fprintf(stderr, "Usage: %s quit|save [path]\n", program_name);
 	exit(9);
 }
 

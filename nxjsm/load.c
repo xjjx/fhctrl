@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2013 Pawel Piatek.
+ *  
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,11 +31,7 @@
 
 #include <cdk.h>
 
-#define APPNAME "nXjSM"
-#define SESFILE "session.cfg"
-#define LOGDIR "/tmp"
-#define DEFAULT_XTERM "xterm -geometry 132x43 -e"
-#define DEFAULT_FSTHOST_GUI "1"
+#include "config.h"
 
 static volatile bool quit = false;
 void signal_handler (int sig) { quit = true; }
@@ -389,6 +403,7 @@ void gui_refresh_connections ( struct GUI* gui, JSList* list, jack_client_t* cli
 
 int main ( int argc, char *argv[] ) {
 	if ( argc < 2 ) {
+		fprintf ( stderr, "%s (load) | Version: %s\n", APPNAME, VERSION );
 		fprintf ( stderr, "Usage: %s <session_dir>\n", argv[0] );
 		return 1;
 	}

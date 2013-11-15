@@ -1,0 +1,24 @@
+Requirements:
+	* cdk ( which require ncurses )
+	* libconfig
+	* jack-audio-connection-kit (jack1 or jack2)
+
+NOTE:
+On some distros there a lack of jslist.h header.
+If expirience this, then please report this to Jack packager
+and/or Jack Devels
+
+Building: (should work at least with GNU and BSD make)
+	make
+
+Installing:
+	make install
+
+There is support for DESTDIR, for example
+	make DESTDIR=/tmp/installpath install
+
+Cleaning:
+	make clean
+
+Send any comments about nxjsm to:
+	Xj <xj@wp.pl>
