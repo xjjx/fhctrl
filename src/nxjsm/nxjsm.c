@@ -25,15 +25,20 @@ void jack_shutdown (void *arg) { quit = true; }
 typedef struct {
 	pid_t pid;
 	bool ready;
-	char* dir;
+	char* dir; /* Relative session dir */
 	char* cmd;
 	char* name;
-	char* log;
+	char* log; /* Path to logfile */
 } app_t;
 
 typedef struct {
-        char *src;
-        char *dst;
+	char* name;   /* Orginal name */
+	char* mapped; /* Mapped name */
+} port_t;
+
+typedef struct {
+	port_t* src;
+	port_t* dst;
 } connection_t;
 
 static void jack_log_silent(const char *msg) { return; }
@@ -79,16 +84,22 @@ void free_app ( app_t* a ) {
 
 connection_t* new_con ( const char *src, const char *dst ) {
 //	printf ( "CON: %s -> %s\n", src, dst );
-        connection_t* new = malloc( sizeof(connection_t) );
-        new->src = strdup ( src );
-        new->dst = strdup ( dst );
-        return new;
+	connection_t* c = malloc( sizeof(connection_t) );
+	c->src = malloc( sizeof(port_t) );
+	c->dst = malloc( sizeof(port_t) );
+
+	c->src->name = strdup ( src );
+	c->dst->name = strdup ( dst );
+        c->src->mapped = c->dst->mapped = NULL;
+        return c;
 }
 
 void free_con ( connection_t *c ) {
-        free(c->src);
-        free(c->dst);
-        free(c);
+        free ( c->src->name );
+        free ( c->dst->name );
+        if ( c->src->mapped ) free ( c->src->mapped );
+        if ( c->dst->mapped ) free ( c->dst->mapped );
+        free ( c );
 }
 
 int run_app ( app_t* app ) {
@@ -96,7 +107,7 @@ int run_app ( app_t* app ) {
 	int fd = fileno ( f );
 	dup2(fd, STDOUT_FILENO);	// make stdout go to file
 	dup2(fd, STDERR_FILENO);	// make stderr go to file
-	close ( fd );	// fd no longer needed - the dup'ed handles are sufficient
+	close ( fd ); // fd no longer needed - the dup'ed handles are sufficient
 
 	setenv ( "XTERM", DEFAULT_XTERM, 0 ); // Default XTERM
 	setenv ( "FSTHOST_GUI", DEFAULT_FSTHOST_GUI, 0 ); // Default FSTHOST_GUI
@@ -113,7 +124,6 @@ void refresh_applist ( CDKSCROLL* applist, JSList* list ) {
 	for ( l = list; l; l = jack_slist_next(l) ) {
 		app_t* app = l->data;
 
-//		snprintf ( chuj, sizeof chuj, "%-60s (PID: %d): </32>%s<!32>", app->cmd, app->pid, (app->ready) ? "READY":"WORKING" );
 		snprintf ( chuj, sizeof chuj, "%-20s (PID: %6d): </32>%s<!32>", app->name, app->pid, (app->ready) ? "READY":"WORKING" );
 		addCDKScrollItem ( applist, chuj );
 	}
@@ -126,56 +136,78 @@ void app_wait ( app_t* app ) {
 	if (wpid == 0) {
 //		printf ( "Still wait for PID:%d\n", pid[i] );
 	} else {
-		if (WIFEXITED(Stat)) {
+//		if (WIFEXITED(Stat)) {
 //			printf("Child %d exited, status=%d\n", pid[i], WEXITSTATUS(Stat));
 //			deleteCDKScrollItem ( applist, i );
-		} else if (WIFSIGNALED(Stat)) {
+//		} else if (WIFSIGNALED(Stat)) {
 //			printf("Child %d was terminated with a status of: %d \n", pid[i], WTERMSIG(Stat));
 //			deleteCDKScrollItem ( applist, i );
-		}
+//		}
 		app->pid = 0;
 		app->ready = true;
 	}
 }
 
-int uuid2name ( jack_client_t *client, const char* arg, char* outbuf, size_t outbuf_size ) {
+char* uuid2name ( jack_client_t *client, const char* arg ) {
 	char *port_part = strchr( arg, ':' );
 	size_t size = port_part - arg + 1;
 	char uuid[size];
 	snprintf ( uuid, size, "%s", arg );
 
 	char *clientname = jack_get_client_name_by_uuid ( client, uuid );
-	if ( ! clientname ) return 0;
+	if ( ! clientname ) return NULL;
 
-	if ( outbuf_size < strlen(clientname) + strlen(port_part) + 1)
-		return 0;
+	size = strlen(clientname) + strlen(port_part) + 1;
+	char* mapped = malloc ( size );
 
-	snprintf ( outbuf, outbuf_size, "%s%s", clientname, port_part );
-	jack_free (clientname);
+	snprintf ( mapped, size, "%s%s", clientname, port_part );
+	jack_free ( clientname );
 
-	return 1;
+	return mapped;
 }
 
-jack_port_t* get_port ( jack_client_t* client, char* name, int flags ) {
-	int port_name_size = jack_port_name_size();
-	char portName[port_name_size];
+jack_port_t* get_port ( jack_client_t* client, port_t* p, int flags ) {
+	jack_port_t* port = NULL;
 
-	if ( ! uuid2name ( client, name, portName, sizeof portName ) )
-		strncpy ( portName, name, sizeof(portName) - 1 );
+	/* Check if mapped */
+	if ( p->mapped ) {
+		port = jack_port_by_name ( client, p->mapped );
+		if ( port ) goto got_port;
+		
+		/* If there is no such port then unmap */
+		free ( p->mapped );
+		p->mapped = NULL;
+	}
 
-	jack_port_t* port = jack_port_by_name ( client, portName );
+	/* If not mapped ( or was just unmapped ) try map */
+	if ( ! p->mapped ) {
+		p->mapped = uuid2name ( client, p->name );
+
+		/* Now if we have mapped version */
+		if ( p->mapped ) {
+			port = jack_port_by_name ( client, p->mapped );
+			if ( port ) goto got_port;
+
+			/* If there is no such port then unmap ( again ? ) */
+			free ( p->mapped );
+			p->mapped = NULL;
+		}
+	}
+
+	/* Fallback - try get port for original name */
+	port = jack_port_by_name ( client, p->name );
 	if ( ! port ) return NULL;
 
-	int port_flags = jack_port_flags (port);
-	if ( ! ( port_flags & flags) ) return NULL;
+got_port:
+	if ( ! ( jack_port_flags(port) & flags ) ) return NULL;
 
 	return port;
 }
 
-const char* get_port_name ( jack_client_t* client, char* name, int flags ) {
-	jack_port_t* port = get_port ( client, name, flags );
-	if ( ! port ) return NULL; 
-	return jack_port_name ( port );
+const char* get_port_name ( jack_client_t* client, port_t* port, int flags ) {
+	jack_port_t* jport = get_port ( client, port, flags );
+	if ( ! jport ) return NULL; 
+	return jack_port_name ( jport );
 }
 
 bool check_con ( connection_t* con, jack_client_t* client ) {
@@ -183,10 +215,9 @@ bool check_con ( connection_t* con, jack_client_t* client ) {
 	jack_port_t* sport = get_port ( client, con->src, JackPortIsOutput );
 	if ( ! sport ) return false;
 
-	/* Get dst port */
-	jack_port_t* dport = get_port ( client, con->dst, JackPortIsInput );
-	if ( ! dport ) return false;
-	const char* dport_name = jack_port_name ( dport );
+	/* Get dst port name */
+	const char* dport_name = get_port_name ( client, con->dst, JackPortIsInput );
+	if ( ! dport_name ) return false;
 
 	/* Check connections */
 	const char** conn = jack_port_get_all_connections ( client, sport );
@@ -206,8 +237,6 @@ bool check_con ( connection_t* con, jack_client_t* client ) {
 void refresh_conlist ( CDKSCROLL* conlist, JSList* list, jack_client_t* client ) {
 	JSList* l;
 	char chuj[256];
-	char srcbuf[29];
-	char dstbuf[29];
 
 	setCDKScrollItems ( conlist, NULL, 0, 0 );
 	for ( l = list; l; l = jack_slist_next(l) ) {
@@ -215,15 +244,11 @@ void refresh_conlist ( CDKSCROLL* conlist, JSList* list, jack_client_t* client )
 
 		bool connected = check_con ( con, client );
 
-		char *src = con->src;
-		if ( uuid2name ( client, con->src, srcbuf, sizeof srcbuf ) )
-			src = srcbuf;
-
-		char* dst = con->dst;
-		if ( uuid2name ( client, con->dst, dstbuf, sizeof dstbuf ) )
-			dst = dstbuf;
-
-		snprintf ( chuj, sizeof chuj, "%-28s -> %-28s (</32>%s<!32>)", src, dst, (connected)?"CONNECTED":"WAIT" );
+		snprintf ( chuj, sizeof chuj, "%-28s -> %-28s (</32>%s<!32>)",
+			(con->src->mapped) ? con->src->mapped : con->src->name,
+			(con->dst->mapped) ? con->dst->mapped : con->dst->name,
+			(connected)?"CONNECTED":"WAIT"
+		);
 		addCDKScrollItem ( conlist, chuj );
 	}
 	drawCDKScroll ( conlist, TRUE );
