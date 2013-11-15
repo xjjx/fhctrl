@@ -27,6 +27,8 @@
 #include <jack/jslist.h>
 #include <jack/session.h>
 
+#include <libconfig.h>
+
 #define CONNECT_APP "fhctrl_connect -w 60"
 #define SKIP_MIDI 1
 
@@ -39,6 +41,8 @@ typedef struct {
 	char *src;
 	char *dst;
 } connection_t;
+
+enum NodeType { APP = 0, CON = 1 };
 
 jack_client_t *client;
 
@@ -112,9 +116,57 @@ void store_connection(JSList** list, const char* src, const char* dst) {
 	*list = jack_slist_append( *list, c );
 }
 
+void conf_add_app ( config_t* cfg, int num, const char* name, const char* command, int flags ) {
+	char node_name[32];
+	snprintf ( node_name, sizeof node_name, "app%d", num );
+	config_setting_t* app = config_setting_add ( cfg->root, node_name, CONFIG_TYPE_GROUP );
+
+	/* Node type */
+	config_setting_t* type = config_setting_add ( app, "type", CONFIG_TYPE_INT );
+	config_setting_set_int ( type, APP );
+
+	/* Directory */
+	config_setting_t* dir = config_setting_add ( app, "dir", CONFIG_TYPE_STRING );
+	config_setting_set_string ( dir, name );
+
+	/* Name */
+	config_setting_t* cname = config_setting_add ( app, "name", CONFIG_TYPE_STRING );
+	config_setting_set_string ( cname, name );
+
+	/* Command */
+	config_setting_t* cmd = config_setting_add ( app, "cmd", CONFIG_TYPE_STRING );
+	if ( flags & JackSessionNeedTerminal ) {
+		/* ncurses aplications */
+		char scmd[256];
+		snprintf ( scmd, sizeof scmd, "$XTERM %s", command );
+	} else {
+		/* other aplications */
+		config_setting_set_string ( cmd, command );
+	}
+}
+
+void conf_add_con ( config_t* cfg, int num, const char* src, const char* dst ) {
+	char node_name[32];
+	snprintf ( node_name, sizeof node_name, "con%d", num );
+	config_setting_t* con = config_setting_add ( cfg->root, node_name, CONFIG_TYPE_GROUP );
+
+	/* Node type */
+	config_setting_t* type = config_setting_add ( con, "type", CONFIG_TYPE_INT );
+	config_setting_set_int ( type, CON );
+
+	/* Source/Output port */
+	config_setting_t* csrc = config_setting_add ( con, "src", CONFIG_TYPE_STRING );
+	config_setting_set_string ( csrc, src );
+
+	/* Destination/Input port */
+	config_setting_t* cdst = config_setting_add ( con, "dst", CONFIG_TYPE_STRING );
+	config_setting_set_string ( cdst, dst );
+}
+
 int main(int argc, char *argv[]) {
 	JSList *uuid_map = NULL;
 	JSList *connections_list = NULL;
+	unsigned short exit_code = 0;
 
 	/* Parse arguments */
 	char *package = basename(argv[0]); /* Program Name */
@@ -143,61 +195,61 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "JACK server not running?\n");
 		exit(1);
 	}
+	jack_on_shutdown(client, jack_shutdown, 0);
 
 	signal(SIGQUIT, signal_handler);
 	signal(SIGTERM, signal_handler);
 	signal(SIGHUP, signal_handler);
 	signal(SIGINT, signal_handler);
 
-	jack_on_shutdown(client, jack_shutdown, 0);
+	/* Init config */
+	config_t cfg;
+	config_init ( &cfg );
 
 	jack_activate(client);
 
-	unsigned short i, j, k;
-	unsigned short exit_code = 0;
-	printf("LOGDIR=${LOGDIR:-/tmp}\n");
-	printf("GLOBAL_SESSION_DIR=${GLOBAL_SESSION_DIR:-%s}\n", save_path);
-	putchar('\n');
 	jack_session_command_t *retval = jack_session_notify( client, NULL, notify_type, save_path );
-	for(i=0; retval[i].uuid; i++ ) {
-		printf( "# UUID: %s | NAME : %s | STATE: ", retval[i].uuid, retval[i].client_name );
+
+	printf ( "# Applications:\n" );
+	unsigned short i;
+	for (i=0; retval[i].uuid; i++ ) {
+		/* Do not save invalid clients */
+		printf( "# UUID: %-5s NAME: %-30s STATE: ", retval[i].uuid, retval[i].client_name );
 		if ( retval[i].flags & JackSessionSaveError) {
 			printf("FAIL !!\n");
 			exit_code = 1;
 			continue;
 		}
 		printf( "OK\n" );
-		printf( "export SESSION_DIR=\"${GLOBAL_SESSION_DIR}%s/\"\n", retval[i].client_name );
-		if ( retval[i].flags & JackSessionNeedTerminal ) {
-			/* ncurses aplications */
-			printf( "$XTERM %s &\n", retval[i].command );
-		} else {
-			/* other aplications */
-			printf( "%s > \"$LOGDIR/%s.log\" 2>&1 &\n", retval[i].command, retval[i].client_name );
-		}
-		putchar('\n');
+
+		/* Add app node to config */
+		conf_add_app ( &cfg, i, retval[i].client_name, retval[i].command, retval[i].flags );
 
 		/* Mapping uuids */
 		map_uuid_name( &uuid_map, retval[i].uuid, retval[i].client_name );
 
+		/* Store connections */
 		int regexp_size = jack_client_name_size() + 4;
 		char port_regexp[regexp_size];
-		snprintf( port_regexp, sizeof port_regexp, "^%s:.*", retval[i].client_name );
+		snprintf ( port_regexp, sizeof port_regexp, "^%s:.*", retval[i].client_name );
 
 		const char **ports = jack_get_ports( client, port_regexp, NULL, 0 );
-		if( !ports ) continue;
+		if ( !ports ) continue;
 
+		unsigned short j;
 		for (j = 0; ports[j]; ++j) {
 			jack_port_t* jack_port = jack_port_by_name( client, ports[j] );
-			int port_flags = jack_port_flags( jack_port );
-			const char* type = jack_port_type(jack_port);
+			int port_flags = jack_port_flags ( jack_port );
+			const char* ptype = jack_port_type ( jack_port );
 
 #ifdef SKIP_MIDI
-			if ( !strcmp(type, JACK_DEFAULT_MIDI_TYPE) ) continue;
+			if ( !strcmp(ptype, JACK_DEFAULT_MIDI_TYPE) ) continue;
 #endif
 
 			const char **conn = jack_port_get_all_connections( client, jack_port );
-			if (! conn) continue;
+			if ( !conn ) continue;
+
+			unsigned short k;
 			for (k=0; conn[k]; k++) {
 				if ( port_flags & JackPortIsInput ) {
 					store_connection(&connections_list, conn[k], ports[j]);
@@ -207,25 +259,39 @@ int main(int argc, char *argv[]) {
 			}
 			jack_free (conn);
 		}
-		jack_free(ports);
+		jack_free (ports);
 	}
+	jack_session_commands_free(retval);
+	jack_client_close(client);
 
 	JSList* l;
 	int name_size = jack_port_name_size();
 	char src[name_size];
 	char dst[name_size];
-	printf("# Connections: %d\n", jack_slist_length(connections_list));
-	for( l=connections_list; l; l=jack_slist_next(l) ) {
+	printf ("# Connections: %d\n", jack_slist_length(connections_list));
+	for( l=connections_list, i=0; l; l=jack_slist_next(l), i++ ) {
 		connection_t *c = l->data;
 		name2uuid( &uuid_map, src, c->src, sizeof src );
 		name2uuid( &uuid_map, dst, c->dst, sizeof dst );
-		printf( "%s -u \"%s\" \"%s\"\n", CONNECT_APP, src, dst );
 		free_connection(c);
+
+		printf ("# %-34s -> %s\n", src, dst);
+		conf_add_con ( &cfg, i, (const char*) src, (const char*) dst );
 	}
-	jack_session_commands_free(retval);
-	jack_slist_free(uuid_map);
-	jack_slist_free(connections_list);
-	jack_client_close(client);
+	jack_slist_free ( uuid_map );
+	jack_slist_free ( connections_list );
+
+	/* Write config */
+	const char* config_file = "/tmp/chuj.cfg";
+	int ret = config_write_file ( &cfg, config_file );
+	config_destroy(&cfg);
+
+	if (ret == CONFIG_TRUE) {
+		printf ( "Save to %s OK\n", config_file );
+	} else {
+		printf ( "Save to %s Fail\n", config_file );
+		exit_code = 2;
+	}
 
 	return exit_code;
 }

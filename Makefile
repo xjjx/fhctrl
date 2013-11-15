@@ -21,7 +21,7 @@ $(APP): src/nfhc.c src/config.c src/ftdilcd.c src/basics.c src/fjack.c src/fhctr
 	$(CC) $(CFLAGS_APP) -o $@ $^ $(LIBRARIES)
 	
 sn: tools/session_notify.c
-	$(CC) $(CFLAGS) -o $(APP)_$@ $^ -ljack
+	$(CC) $(CFLAGS) -o $(APP)_$@ $^ -ljack -lconfig
 
 lsp: tools/lsp.c
 	$(CC) $(CFLAGS) -Wno-deprecated-declarations -o $(APP)_$@ $^ -ljack
