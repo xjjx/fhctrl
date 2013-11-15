@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <string.h>
 
 #include <jack/jack.h>
 #include <jack/jslist.h>
@@ -116,20 +117,6 @@ int run_app ( app_t* app ) {
 	return 1;
 }
 
-void refresh_applist ( CDKSCROLL* applist, JSList* list ) {
-	JSList* l;
-	char chuj[256];
-
-	setCDKScrollItems ( applist, NULL, 0, 0 );
-	for ( l = list; l; l = jack_slist_next(l) ) {
-		app_t* app = l->data;
-
-		snprintf ( chuj, sizeof chuj, "%-20s (PID: %6d): </32>%s<!32>", app->name, app->pid, (app->ready) ? "READY":"WORKING" );
-		addCDKScrollItem ( applist, chuj );
-	}
-	drawCDKScroll ( applist, TRUE );
-}
-
 void app_wait ( app_t* app ) {
 	int Stat;
 	pid_t wpid = waitpid ( app->pid, &Stat, WNOHANG );
@@ -152,7 +139,9 @@ char* uuid2name ( jack_client_t *client, const char* arg ) {
 	char *port_part = strchr( arg, ':' );
 	size_t size = port_part - arg + 1;
 	char uuid[size];
+
 	snprintf ( uuid, size, "%s", arg );
+	fprintf ( stderr, "ARG:%s|PP:%s|UUID:%s|\n", arg, port_part, uuid );
 
 	char *clientname = jack_get_client_name_by_uuid ( client, uuid );
 	if ( ! clientname ) return NULL;
@@ -234,26 +223,6 @@ bool check_con ( connection_t* con, jack_client_t* client ) {
 	return false;
 }
 
-void refresh_conlist ( CDKSCROLL* conlist, JSList* list, jack_client_t* client ) {
-	JSList* l;
-	char chuj[256];
-
-	setCDKScrollItems ( conlist, NULL, 0, 0 );
-	for ( l = list; l; l = jack_slist_next(l) ) {
-		connection_t* con = l->data;
-
-		bool connected = check_con ( con, client );
-
-		snprintf ( chuj, sizeof chuj, "%-28s -> %-28s (</32>%s<!32>)",
-			(con->src->mapped) ? con->src->mapped : con->src->name,
-			(con->dst->mapped) ? con->dst->mapped : con->dst->name,
-			(connected)?"CONNECTED":"WAIT"
-		);
-		addCDKScrollItem ( conlist, chuj );
-	}
-	drawCDKScroll ( conlist, TRUE );
-}
-
 int graph_cb_handler ( void *arg ) {
 	bool* graph_changed = (bool*) arg;
 	*graph_changed = true;
@@ -329,6 +298,95 @@ read_config_return:
 	return ret;
 }
 
+struct GUI {
+	WINDOW* screen;
+	CDKSCREEN* cdkscreen;
+	CDKLABEL* head;
+	CDKSCROLL* applications;
+	CDKSCROLL* connections;
+};
+
+void gui_init ( struct GUI* gui ) {
+	/* Initialize the Cdk screen.  */
+	gui->screen = initscr();
+	gui->cdkscreen = initCDKScreen (gui->screen);
+
+	int rows, cols;
+	getmaxyx ( gui->cdkscreen->window, rows, cols );
+	rows = rows; // fix warning
+
+	/* Disable cursor */
+	curs_set(0);
+
+	/* Start CDK Colors */
+	initCDKColor();
+
+	/* Head */
+	int app_size = 37;
+	char* mesg[1] = { "<C></40>Nurses Xj Session Manager<!40>" };
+	gui->head = newCDKLabel ( gui->cdkscreen, CENTER, TOP, mesg, 1, FALSE, FALSE );
+
+	/* Create APP list */
+	gui->applications = newCDKScroll (
+		gui->cdkscreen, LEFT, 1, RIGHT, -1, app_size,
+		"</U/63>APPLICATIONS list:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
+	);
+
+	/* Create connections list */
+	gui->connections = newCDKScroll (
+		gui->cdkscreen, RIGHT, 1, RIGHT, -1, cols - app_size - 2,
+		"</U/63>CONNECTIONS list:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
+	);
+}
+
+void gui_destroy ( struct GUI* gui ) {
+	destroyCDKLabel  ( gui->head );
+	destroyCDKScroll ( gui->applications );
+	destroyCDKScroll ( gui->connections );
+	destroyCDKScreen ( gui->cdkscreen );
+	endCDK();
+}
+
+void gui_refresh_applications ( struct GUI* gui, JSList* list ) {
+	/* Clean list */
+	setCDKScrollItems ( gui->applications, NULL, 0, 0 );
+
+	/* Create new list */
+	char chuj[256];
+	JSList* l;
+	for ( l = list; l; l = jack_slist_next(l) ) {
+		app_t* app = l->data;
+
+		if ( app->ready ) {
+			snprintf ( chuj, sizeof chuj, "%-20s (STOPPED)", app->name);
+		} else {
+			snprintf ( chuj, sizeof chuj, "%-20s (PID: %6d)", app->name, app->pid );
+		}
+		addCDKScrollItem ( gui->applications, chuj );
+	}
+}
+
+void gui_refresh_connections ( struct GUI* gui, JSList* list, jack_client_t* client ) {
+	/* Clear list */
+	setCDKScrollItems ( gui->connections, NULL, 0, 0 );
+
+	/* Create new list */
+	char chuj[256];
+	JSList* l;
+	for ( l = list; l; l = jack_slist_next(l) ) {
+		connection_t* con = l->data;
+
+		bool connected = check_con ( con, client );
+
+		snprintf ( chuj, sizeof chuj, "%-28s -> %-28s (</32>%s<!32>)",
+			(con->src->mapped) ? con->src->mapped : con->src->name,
+			(con->dst->mapped) ? con->dst->mapped : con->dst->name,
+			(connected)?"CONNECTED":"WAIT"
+		);
+		addCDKScrollItem ( gui->connections, chuj );
+	}
+}
+
 int main ( int argc, char *argv[] ) {
 	if ( argc < 2 ) {
 		fprintf ( stderr, "Usage: %s <session_dir>\n", argv[0] );
@@ -361,43 +419,17 @@ int main ( int argc, char *argv[] ) {
         jack_set_info_function ( jack_log_silent );
         jack_set_error_function ( jack_log_silent );
 
-	jack_activate ( client );
-
-	/* Initialize the Cdk screen.  */
-	WINDOW *screen = initscr();
-	CDKSCREEN* cdkscreen = initCDKScreen (screen);
-
-	int rows, cols;
-	getmaxyx ( cdkscreen->window, rows, cols );
-	rows = rows; // fix warning
-
-	/* Disable cursor */
-	curs_set(0);
-
-	/* Start CDK Colors */
-	initCDKColor();
-
-	/* Head */
-	char* mesg[1] = { "<C></40>Nurses Xj Session Manager<!40>" };
-        CDKLABEL* head = newCDKLabel ( cdkscreen, CENTER, TOP, mesg, 1, FALSE, FALSE );
-
-	/* Create APP list */
-	CDKSCROLL *applist = newCDKScroll (
-		cdkscreen, LEFT, 1, RIGHT, -1, 46,
-		"</U/63>APPLICATIONS list:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
-	);
-
-	/* Create connections list */
-	CDKSCROLL *conlist = newCDKScroll (
-		cdkscreen, RIGHT, 1, RIGHT, -1, cols - 46 - 2,
-		"</U/63>CONNECTIONS list:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE
-	);
+	/* Init GUI */
+	struct GUI gui;
+	gui_init ( &gui );
 
 	signal(SIGQUIT, signal_handler);
 	signal(SIGTERM, signal_handler);
 	signal(SIGHUP, signal_handler);
 	signal(SIGINT, signal_handler);
 
+	bool app_need_refresh = true; /* Refresh on start */
+	jack_activate ( client );
 	while ( ! quit ) {
 		JSList* l;
 		for ( l = app_list; l; l = jack_slist_next(l) ) {
@@ -413,25 +445,30 @@ int main ( int argc, char *argv[] ) {
 					app->pid = 0;
 				}
 				app->ready = false;
+				app_need_refresh = true;
 			}
 			app_wait ( app );
 		}
-		refresh_applist ( applist, app_list );
+
+		if ( app_need_refresh )
+			gui_refresh_applications ( &gui, app_list );
+
 		if ( graph_changed ) {
 			restore_connections ( con_list, client );
-			refresh_conlist ( conlist, con_list, client );
+			gui_refresh_connections ( &gui, con_list, client );
 		}
-		drawCDKLabel ( head, FALSE );
+
+		if ( app_need_refresh || graph_changed ) {
+			app_need_refresh = false;
+			graph_changed = false;
+			refreshCDKScreen ( gui.cdkscreen );
+		}
 
 		sleep ( 1 );
 	}
 
 	/* Cleanup */
-	destroyCDKLabel ( head );
-	destroyCDKScroll ( applist );
-	destroyCDKScroll ( conlist );
-	destroyCDKScreen ( cdkscreen );
-	endCDK();
+	gui_destroy ( &gui );
 
 	puts ( "Wait for apps ..." );
 	while ( wait(NULL) > 0 );
