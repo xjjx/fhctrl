@@ -38,8 +38,7 @@ detect_xterminal() {
 }
 
 usage() {
-#	echo "Usage: $0 load|save SessionPath"
-	echo "Usage: $0 load SessionPath"
+	echo "Usage: $0 load|save SessionPath"
 	exit 1
 }
 
@@ -110,8 +109,7 @@ ses_save() {
 
 	mkdir "${SES_PATH}"
 
-	if fhctrl_sn save "${SES_PATH}" > "${SES_PATH}/session.sh"; then
-		echo 'Session Saved'
+	if nxjsm_save save "${SES_PATH}"; then
 		ses_clean "${SES_PATH}.broken"
 		return 0
 	else
@@ -137,6 +135,6 @@ case $MODE in
 		start_wine || exit 3
 		start_ses || exit 4
 		;;
-#	'save') ses_save || exit 5;;
+	'save') ses_save || exit 5;;
 	*) usage
 esac

@@ -1,8 +1,6 @@
 /*
- *  session_notify.c -- ultra minimal session manager
- *
- *  Copyright (C) 2010 Torben Hohn.
  *  Copyright (C) 2013 Pawel Piatek.
+ *  Based on session_notify.c by Torben Hohn.
  *  
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -26,10 +24,11 @@
 #include <jack/jack.h>
 #include <jack/jslist.h>
 #include <jack/session.h>
+#include <limits.h>
 
 #include <libconfig.h>
 
-#define CONNECT_APP "fhctrl_connect -w 60"
+#define SESFILE "session.cfg"
 #define SKIP_MIDI 1
 
 typedef struct {
@@ -163,7 +162,7 @@ void conf_add_con ( config_t* cfg, int num, const char* src, const char* dst ) {
 	config_setting_set_string ( cdst, dst );
 }
 
-int main(int argc, char *argv[]) {
+int main (int argc, char *argv[]) {
 	JSList *uuid_map = NULL;
 	JSList *connections_list = NULL;
 	unsigned short exit_code = 0;
@@ -185,9 +184,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	/* Parse save path (Jack need trailing slash) */
-	size_t plen = strlen(path);
+	size_t plen = strlen ( path );
 	char save_path[plen + 2];
-	strncpy(save_path, path, plen + 2);
+	strcpy ( save_path, path );
 	if ( save_path[plen - 1] != '/' ) save_path[plen] = '/';
 
 	/* become a JACK client */
@@ -282,7 +281,8 @@ int main(int argc, char *argv[]) {
 	jack_slist_free ( connections_list );
 
 	/* Write config */
-	const char* config_file = "/tmp/chuj.cfg";
+	char config_file[PATH_MAX];
+	snprintf ( config_file, sizeof config_file, "%s%s", save_path, SESFILE );
 	int ret = config_write_file ( &cfg, config_file );
 	config_destroy(&cfg);
 
