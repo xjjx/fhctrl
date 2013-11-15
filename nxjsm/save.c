@@ -138,6 +138,7 @@ void conf_add_app ( config_t* cfg, int num, const char* name, const char* comman
 		/* ncurses aplications */
 		char scmd[256];
 		snprintf ( scmd, sizeof scmd, "$XTERM %s", command );
+		config_setting_set_string ( cmd, scmd );
 	} else {
 		/* other aplications */
 		config_setting_set_string ( cmd, command );

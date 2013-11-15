@@ -83,7 +83,7 @@ start_wine() {
 
 start_ses() {
 	echo "Starting session: ${SES_PATH}"
-	nxjsm "$SES_PATH" || return 1
+	nxjsm_load "$SES_PATH" || return 1
 	return 0
 }
 

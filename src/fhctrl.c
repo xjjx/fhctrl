@@ -143,7 +143,7 @@ static void fjack_session_reply ( FJACK* fjack ) {
 	sev->flags |= JackSessionNeedTerminal;
 
 	char *restore_cmd = malloc(256);
-	snprintf(restore_cmd, 256, "fhctrl \"${SESSION_DIR}state.cfg\" %s", sev->client_uuid);
+	snprintf ( restore_cmd, 256, "fhctrl \"${SESSION_DIR}state.cfg\" %s", sev->client_uuid );
 	sev->command_line = restore_cmd;
 
 	FHCTRL* fhctrl = (FHCTRL*) fjack->user;
