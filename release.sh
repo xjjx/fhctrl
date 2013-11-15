@@ -1,7 +1,7 @@
 #!/bin/sh
 
 APP='fhctrl'
-VER='0.7.4'
+VER='0.7.5'
 DST='/media/bigpig/secure/XJ/sampler/fhctrl'
 PKG="${DST}/${APP}-${VER}.tar.xz"
 
