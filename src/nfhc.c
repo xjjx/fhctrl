@@ -473,19 +473,25 @@ void nfhc ( FHCTRL* fhctrl ) {
 				setCDKScrollHighlight (song_list, A_NORMAL);
 				break;
 			case 'i': send_ident_request( fhctrl ); break;
-			case 'n':
+			case 'n': // New song
 				need_redraw = true;
 				Song *song = song_new (fhctrl->songs, fhctrl->fst);
 				change_song_name ( song_list, fhctrl->songs, song );
 				break;
-			case 'g':
+			case 'g': // Change song name
 				need_redraw = true;
 				r = getCDKScrollCurrent ( song_list );
 				change_song_name ( song_list, fhctrl->songs, song_get ( fhctrl->songs, r ) );
 				break;
 			case 'w': update_config( fhctrl ); break; // Update config file
-			case 'e': edit_selector (fhctrl); need_redraw = true; break;
-			case 'l': show_log(); need_redraw = true; break;
+			case 'e': // Edit unit
+				edit_selector (fhctrl);
+				need_redraw = true;
+				break;
+			case 'l': // Show log
+				show_log();
+				need_redraw = true;
+				break;
 			case 'r': ;
 //			case KEY_RESIZE:
 				int rows, cols, lm, tm;
