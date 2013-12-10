@@ -29,7 +29,7 @@
 /* From lcd.c */
 extern void init_lcd( struct LCDScreen* lcd_screen );
 extern void update_lcd( struct LCDScreen* lcd_screen );
-extern void lcd_set_current_fst ( struct LCDScreen* lcd_screen, FSTPlug* fp );
+extern void lcd_set_current_fst ( struct LCDScreen* lcd_screen, Unit* fp );
 
 /* ftdi.h */
 extern void lcd_close();
@@ -64,11 +64,11 @@ send_offer ( FHCTRL* fhctrl, SysExIdentReply* reply ) {
 	fhctrl->offered_last = uuid;
 }
 
-void fhctrl_fst_send ( FHCTRL* fhctrl, FSTPlug* fp, const char* logFuncName ) {
+void fhctrl_fst_send ( FHCTRL* fhctrl, Unit* fp, const char* logFuncName ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
 	switch ( fp->type ) {
-	case FST_TYPE_DEVICE: ;
+	case UNIT_TYPE_DEVICE: ;
 		// For devices just send ProgramChange
 		jack_midi_data_t pc[2];
 		pc[0] = ( fp->state->channel - 1 ) & 0x0F;
@@ -76,7 +76,7 @@ void fhctrl_fst_send ( FHCTRL* fhctrl, FSTPlug* fp, const char* logFuncName ) {
 		pc[1] = fp->state->program & 0x0F;
 		fjack_send ( fjack, &pc, sizeof pc, logFuncName, fp->id );
 		break;
-	case FST_TYPE_PLUGIN: ;
+	case UNIT_TYPE_PLUGIN: ;
 		// If unit is NA then keep it state and skip sending
 		SysExDumpV1 sysex = SYSEX_DUMP;
 		fst_set_sysex ( fp, &sysex );
@@ -96,23 +96,23 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 	// Dump states via SysEx - for all FST
 	short i;
 	for (i=0; i < 128; i++) {
-		FSTPlug* fp = fhctrl->fst[i];
+		Unit* fp = fhctrl->fst[i];
 		if ( ! fp ) continue;
 
 		/* Save current state */
 		enum State curState = fp->state->state;
 
 		// If unit state in song is NA do not copy plugin state
-		FSTState* songFS = song->fst_state[i];
-		if ( songFS->state == FST_NA ) {
+		UnitState* songFS = song->fst_state[i];
+		if ( songFS->state == UNIT_NA ) {
 			switch ( fp->type ) {
-			case FST_TYPE_PLUGIN:
+			case UNIT_TYPE_PLUGIN:
 				// For plugin type this mean set it to bypass
 				// if plugin is already in BYPASS state then skip it
-				if ( fp->state->state == FST_STATE_BYPASS ) {
+				if ( fp->state->state == UNIT_STATE_BYPASS ) {
 					continue;
 				} else {
-					fp->state->state = FST_STATE_BYPASS;
+					fp->state->state = UNIT_STATE_BYPASS;
 				}
 				break;
 			default: // For rest .. mean do nothing
@@ -124,11 +124,11 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 		}
 
 		// Send state to unit
-		if (curState == FST_NA && fp->type != FST_TYPE_DEVICE) {
+		if (curState == UNIT_NA && fp->type != UNIT_TYPE_DEVICE) {
 			// If unit was NA then keep it state and skip sending
 			// NOTE: non-sysex devices does not support NA state
 			//       cause they can't be discovered
-			fp->state->state = FST_NA;
+			fp->state->state = UNIT_NA;
 		} else {
 			fhctrl_fst_send ( fhctrl, fp, "SongSend" );
 		}
@@ -199,14 +199,14 @@ ctrl_channel_handling ( FHCTRL* fhctrl, jack_midi_data_t data[] ) {
 
 static inline void
 fhctrl_handle_ident_reply ( FHCTRL* fhctrl, SysExIdentReply* r ) {
-	// If this is FSTPlug then try to deal with him ;-)
+	// If this is Unit then try to deal with him ;-)
 	if ( r->id == SYSEX_MYID ) {
 		if ( r->model[0] == 0 ) {
 			send_offer ( fhctrl, r );
 		} else {
 			// Note: we refresh GUI when dump back to us
-			FSTPlug* fp = fst_get ( fhctrl->fst, fhctrl->songs, r->model[0] );
-			fp->type = FST_TYPE_PLUGIN; // We just know this ;-)
+			Unit* fp = fst_get ( fhctrl->fst, fhctrl->songs, r->model[0] );
+			fp->type = UNIT_TYPE_PLUGIN; // We just know this ;-)
 			send_dump_request (fhctrl, fp->id);
 		}
 	} /* else { Regular device - not supported yet } */
@@ -220,9 +220,9 @@ fhctrl_handle_sysex_dump ( FHCTRL* fhctrl, SysExDumpV1* sysex ) {
 		return;
 	}
 
-	/* This also create new FSTPlug if needed */
+	/* This also create new Unit if needed */
 	/* FIXME: this use fst_new which can use calloc for new units */
-	FSTPlug* fp = fst_get_from_sysex ( fhctrl->fst, fhctrl->songs, sysex );
+	Unit* fp = fst_get_from_sysex ( fhctrl->fst, fhctrl->songs, sysex );
 
 	lcd_set_current_fst ( &fhctrl->lcd_screen, fp );
 }

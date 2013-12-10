@@ -36,16 +36,16 @@ struct light {
 
 CDKSCREEN* cdkscreen;
 
-int get_status_color ( FSTPlug* fp ) {
+int get_status_color ( Unit* fp ) {
 	switch ( fp->state->state ) {
-		case FST_STATE_BYPASS: return 58;
-		case FST_STATE_ACTIVE:
+		case UNIT_STATE_BYPASS: return 58;
+		case UNIT_STATE_ACTIVE:
 			switch ( fp->type ) {
-				case FST_TYPE_DEVICE: return 60;
-				case FST_TYPE_PLUGIN: return 59;
+				case UNIT_TYPE_DEVICE: return 60;
+				case UNIT_TYPE_PLUGIN: return 59;
 			}
 			break;
-		case FST_NA: return 0;
+		case UNIT_NA: return 0;
 	}
 
 	return 0;
@@ -152,9 +152,9 @@ static int get_value_dialog ( char *title, char *label, char **values, int defau
 
 static int edit_selector ( FHCTRL* fhctrl ) {
 	unsigned short i, count, plug;
-	FSTPlug** fst = fhctrl->fst;
-	FSTPlug* fp;
-	FSTState* fs;
+	Unit** fst = fhctrl->fst;
+	Unit* fp;
+	UnitState* fs;
 	char *values[128];
 	unsigned short valfstmap[128];
 
@@ -195,7 +195,7 @@ static int edit_selector ( FHCTRL* fhctrl ) {
 	--fs->program;
 
 	/* Select Volume */
-	if ( fp->type == FST_TYPE_PLUGIN ) {
+	if ( fp->type == UNIT_TYPE_PLUGIN ) {
 		for (i=0, count=0; i < 128; i++) snprintf(values[count++], 40, "<C>%d", i);
 		fs->volume = get_value_dialog ("Select volume", "Volume", values, fp->state->volume, count);
 		if (!fs->volume) return 0;
@@ -210,7 +210,7 @@ static int edit_selector ( FHCTRL* fhctrl ) {
 	return 1;
 }
 
-void box_update ( struct box *box, FSTPlug *fp) {
+void box_update ( struct box *box, Unit *fp) {
 	char chtxt[3];
 	if ( fp->state->channel == 17 ) {
 		strcpy(chtxt, "--");
@@ -312,9 +312,9 @@ short box_init ( struct box** first ) {
 }
 
 /* Return true if something changed */
-static bool box_bind_to_fst ( struct box* box_first, FSTPlug** fst ) {
+static bool box_bind_to_fst ( struct box* box_first, Unit** fst ) {
 	bool ret = false;
-	FSTPlug *fp;
+	Unit *fp;
 	struct box* box;
 	for ( fp = fst_next(fst,NULL), box = box_first;
 	      fp && box;

@@ -15,7 +15,7 @@ bool dump_state( FHCTRL* fhctrl, const char* config_file ) {
 	config_setting_t* group = config_setting_add(cfg.root, "global", CONFIG_TYPE_GROUP);
 	short i;
 	for (i = 0; i < 128; i++) {
-		FSTPlug* fp = fhctrl->fst[i];
+		Unit* fp = fhctrl->fst[i];
 		if ( ! fp ) continue;
 
 		snprintf ( name, sizeof name, "plugin%d", fp->id );
@@ -36,13 +36,13 @@ bool dump_state( FHCTRL* fhctrl, const char* config_file ) {
 		config_setting_t* song_name = config_setting_add(group, "name", CONFIG_TYPE_STRING);
 		config_setting_set_string( song_name, s->name );
 		for (i = 0; i < 128; i++) {
-			FSTPlug* fp = fhctrl->fst[i];
+			Unit* fp = fhctrl->fst[i];
 			if ( ! fp ) continue;
 
-			FSTState* fs = s->fst_state[i];
+			UnitState* fs = s->fst_state[i];
 
 			/* Do not save states for N/A units */
-			if ( fs->state == FST_NA ) continue;
+			if ( fs->state == UNIT_NA ) continue;
 
 			snprintf(name, sizeof name, "plugin%d", fp->id);
 
@@ -101,7 +101,7 @@ bool load_state( FHCTRL* fhctrl, const char* config_file ) {
 		unsigned short id = config_setting_get_int_elem(list, 0);
 
 		// Create/Get unit for speific id
-		FSTPlug* fp = fst_get ( fhctrl->fst, fhctrl->songs, id );
+		Unit* fp = fst_get ( fhctrl->fst, fhctrl->songs, id );
 
 		// Unit type
 		fp->type = config_setting_get_int_elem ( list, 1 );
@@ -145,7 +145,7 @@ bool load_state( FHCTRL* fhctrl, const char* config_file ) {
 
 			// Maybe this song doesn't have state for this unit ?
 			if ( plug_list ) {
-				FSTState* fs = song->fst_state[id];
+				UnitState* fs = song->fst_state[id];
 				fs->state	= config_setting_get_int_elem		( plug_list, 0 );
 				fs->program	= config_setting_get_int_elem		( plug_list, 1 );
 				fs->channel	= config_setting_get_int_elem		( plug_list, 2 );

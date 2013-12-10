@@ -20,7 +20,7 @@ void init_lcd( struct LCDScreen* lcd_screen ) {
 void update_lcd( struct LCDScreen* lcd_screen ) {
 	if (! lcd_screen->available) return;
 
-	FSTPlug* fp = lcd_screen->fst;
+	Unit* fp = lcd_screen->fst;
 	if(!fp) return;
 
 	char line[24];
@@ -35,7 +35,7 @@ void update_lcd( struct LCDScreen* lcd_screen ) {
 	lcd_text(0,2,fp->name);			// Line 3
 }
 
-void lcd_set_current_fst ( struct LCDScreen* lcd_screen, FSTPlug* fp ) {
+void lcd_set_current_fst ( struct LCDScreen* lcd_screen, Unit* fp ) {
 	if ( ! lcd_screen->available ) return;
 	lcd_screen->fst = fp;
 }

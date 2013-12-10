@@ -9,7 +9,7 @@
 struct LCDScreen {
 	bool available; /* Are we have LCD ? */
 	const char* app_name;
-	FSTPlug* fst;
+	Unit* fst;
 };
 
 struct CDKGUI {
@@ -30,7 +30,7 @@ typedef struct _FHCTRL {
 	void*			user;
 
 	/* Public variables */
-	FSTPlug*		fst[128];
+	Unit*		fst[128];
 	Song**			songs;
 	struct CDKGUI		gui;
 	struct LCDScreen	lcd_screen;
@@ -42,7 +42,7 @@ void nfhc ( FHCTRL* fhctrl );
 /* Exported functions */
 void send_ident_request ( FHCTRL* fhctrl );
 void fhctrl_song_send ( FHCTRL* fhctrl, short SongNumber);
-void fhctrl_fst_send ( FHCTRL* fhctrl, FSTPlug* fp, const char* logFuncName );
+void fhctrl_fst_send ( FHCTRL* fhctrl, Unit* fp, const char* logFuncName );
 void update_config ( FHCTRL* fhctrl );
 int cpu_load ( FHCTRL* fhctrl );
 void send_dump_request ( FHCTRL* fhctrl, short id );

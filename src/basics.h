@@ -13,50 +13,50 @@
 #include "sysex.h"
 
 enum State {
-	FST_STATE_BYPASS = 0,
-	FST_STATE_ACTIVE = 1,
-	FST_NA = 2 // NOT AVAILABLE
+	UNIT_STATE_BYPASS = 0,
+	UNIT_STATE_ACTIVE = 1,
+	UNIT_NA = 2 // NOT AVAILABLE
 };
 
-typedef struct _FSTState {
+typedef struct _UnitState {
         enum State state;
         uint8_t program; /* 0 - 127 */
         uint8_t channel; /* 0 - 17 */
         uint8_t volume; /* 0 - 127 */
         char program_name[24];
-} FSTState;
+} UnitState;
 
-enum Type { FST_TYPE_PLUGIN, FST_TYPE_DEVICE };
-typedef struct _FSTPlug {
+enum Type { UNIT_TYPE_PLUGIN, UNIT_TYPE_DEVICE };
+typedef struct _Unit {
         uint8_t id; /* 0 - 127 */
         char name[24];
 	enum Type type;
 	bool change;
-       	FSTState* state;
-} FSTPlug;
+       	UnitState* state;
+} Unit;
 
 typedef struct _Song {
         char name[24];
-        struct _FSTState* fst_state[127];
+        struct _UnitState* fst_state[127];
         struct _Song* next;
 } Song;
 
 /****************** STATE **************************************/
-FSTState* state_new();
+UnitState* state_new();
 /****************** FST ****************************************/
-void fst_new ( FSTPlug** fst, Song** songs, uint8_t uuid );
-uint8_t fst_uniqe_id ( FSTPlug** fst, uint8_t start );
-FSTPlug* fst_get ( FSTPlug** fst, Song** songs, uint8_t uuid );
-FSTPlug* fst_next ( FSTPlug** fst, FSTPlug* prev );
-void fst_set_sysex ( FSTPlug* fp, SysExDumpV1* sysex );
-FSTPlug* fst_get_from_sysex ( FSTPlug** fst, Song** songs, SysExDumpV1* sysex );
-bool fst_is_any_na ( FSTPlug** fst );
-void fst_reset_to_na ( FSTPlug** fst );
+void fst_new ( Unit** fst, Song** songs, uint8_t uuid );
+uint8_t fst_uniqe_id ( Unit** fst, uint8_t start );
+Unit* fst_get ( Unit** fst, Song** songs, uint8_t uuid );
+Unit* fst_next ( Unit** fst, Unit* prev );
+void fst_set_sysex ( Unit* fp, SysExDumpV1* sysex );
+Unit* fst_get_from_sysex ( Unit** fst, Song** songs, SysExDumpV1* sysex );
+bool fst_is_any_na ( Unit** fst );
+void fst_reset_to_na ( Unit** fst );
 /****************** SONG ****************************************/
-Song* song_new(Song** songs, FSTPlug** fst);
+Song* song_new(Song** songs, Unit** fst);
 Song* song_get(Song** songs, short SongNumber);
 static inline Song* song_first ( Song** songs ) { return *songs; }
 short song_count( Song** songs );
-void song_update(Song* song, FSTPlug** fst);
+void song_update(Song* song, Unit** fst);
 
 #endif /* __basics_h__ */

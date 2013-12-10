@@ -13,10 +13,10 @@
 #include "log.h"
 
 /****************** STATE **************************************/
-FSTState* state_new() {
-	FSTState* fs = calloc(1,sizeof(FSTState));
+UnitState* state_new() {
+	UnitState* fs = calloc(1,sizeof(UnitState));
 	// Default state is Inactive
-	fs->state = FST_NA;
+	fs->state = UNIT_NA;
 	// Default program name is .. like below ;-)
 	strcpy(fs->program_name, "<<<- UNKNOWN PRESET- >>>");
 	// Rest is initialized to 0 ( by calloc )
@@ -24,11 +24,11 @@ FSTState* state_new() {
 }
 
 /****************** FST ****************************************/
-void fst_new ( FSTPlug** fst, Song** songs, uint8_t uuid ) {
-	FSTPlug* f = malloc(sizeof(FSTPlug));
+void fst_new ( Unit** fst, Song** songs, uint8_t uuid ) {
+	Unit* f = malloc(sizeof(Unit));
 	snprintf(f->name, sizeof f->name, "Device%d", uuid);
 	f->id = uuid;
-	f->type = FST_TYPE_PLUGIN; // default type
+	f->type = UNIT_TYPE_PLUGIN; // default type
 	f->state = state_new();
 	f->change = true;
 
@@ -41,19 +41,19 @@ void fst_new ( FSTPlug** fst, Song** songs, uint8_t uuid ) {
 	fst[uuid] = f;
 }
 
-uint8_t fst_uniqe_id ( FSTPlug** fst, uint8_t start ) {
+uint8_t fst_uniqe_id ( Unit** fst, uint8_t start ) {
 	uint8_t i = start;
 	for( ; i < 128; i++) if (!fst[i]) return i;
 	return 0; // 0 mean error
 }
 
-FSTPlug* fst_get ( FSTPlug** fst, Song** songs, uint8_t uuid ) {
+Unit* fst_get ( Unit** fst, Song** songs, uint8_t uuid ) {
 	if (fst[uuid] == NULL) fst_new( fst, songs, uuid);
 	return fst[uuid];
 }
 
-FSTPlug* fst_next ( FSTPlug** fst, FSTPlug* prev ) {
-	FSTPlug* fp;
+Unit* fst_next ( Unit** fst, Unit* prev ) {
+	Unit* fp;
 	uint8_t i = (prev == NULL) ? 0 : prev->id + 1;
 	while ( i < 128 ) {
 		fp = fst[i];
@@ -63,8 +63,8 @@ FSTPlug* fst_next ( FSTPlug** fst, FSTPlug* prev ) {
 	return NULL;
 }
 
-void fst_set_sysex ( FSTPlug* fp, SysExDumpV1* sysex ) {
-	FSTState* fs = fp->state;
+void fst_set_sysex ( Unit* fp, SysExDumpV1* sysex ) {
+	UnitState* fs = fp->state;
 
         sysex->uuid = fp->id;
         sysex->program = fs->program;
@@ -77,11 +77,11 @@ void fst_set_sysex ( FSTPlug* fp, SysExDumpV1* sysex ) {
         memcpy(sysex->plugin_name, fp->name, sizeof(sysex->plugin_name));
 }
 
-FSTPlug* fst_get_from_sysex ( FSTPlug** fst, Song** songs, SysExDumpV1* sysex ) {
-	FSTPlug* fp = fst_get( fst, songs, sysex->uuid );
-	FSTState* fs = fp->state;
+Unit* fst_get_from_sysex ( Unit** fst, Song** songs, SysExDumpV1* sysex ) {
+	Unit* fp = fst_get( fst, songs, sysex->uuid );
+	UnitState* fs = fp->state;
 
-	fp->type = FST_TYPE_PLUGIN; // We just know this ;-)
+	fp->type = UNIT_TYPE_PLUGIN; // We just know this ;-)
 	strcpy ( fp->name, (char*) sysex->plugin_name );
 
 	fs->state	= sysex->state;
@@ -95,33 +95,33 @@ FSTPlug* fst_get_from_sysex ( FSTPlug** fst, Song** songs, SysExDumpV1* sysex ) 
 	return fp;
 }
 
-void fst_reset_to_na ( FSTPlug** fst ) {
+void fst_reset_to_na ( Unit** fst ) {
 	uint8_t i;
 	for ( i=0; i < 128; i++ ) {
-		FSTPlug* fp = fst[i];
+		Unit* fp = fst[i];
 		if ( ! fp ) continue;
 
 		// NOTE: non-sysex devices doesn't handle IdentRequest
-		if ( fp->type != FST_TYPE_DEVICE )
-			fp->state->state = FST_NA;
+		if ( fp->type != UNIT_TYPE_DEVICE )
+			fp->state->state = UNIT_NA;
 	}
 }
 
-bool fst_is_any_na ( FSTPlug** fst ) {
+bool fst_is_any_na ( Unit** fst ) {
 	uint8_t i;
 	for (i=0; i < 128; i++) {
-		FSTPlug* fp = fst[i];
+		Unit* fp = fst[i];
 		if ( ! fp ) continue;
 
-		if ( fp->type != FST_TYPE_DEVICE && 
-		     fp->state->state == FST_NA
+		if ( fp->type != UNIT_TYPE_DEVICE && 
+		     fp->state->state == UNIT_NA
 		) return true;
 	}
 	return false;
 }
 
 /****************** SONG ****************************************/
-Song* song_new ( Song** songs, FSTPlug** fst) {
+Song* song_new ( Song** songs, Unit** fst) {
 	uint8_t i;
 	Song* s = calloc(1, sizeof(Song));
 
@@ -161,7 +161,7 @@ short song_count ( Song** songs ) {
 	return count;
 }
 
-void song_update ( Song* song, FSTPlug** fst ) {
+void song_update ( Song* song, Unit** fst ) {
 	if ( ! song ) {
 		LOG("SongUpdate: no such song");
 		return;
@@ -169,8 +169,8 @@ void song_update ( Song* song, FSTPlug** fst ) {
 
 	uint8_t i;
 	for(i=0; i < 128; i++) {
-		// Do not update state for inactive FSTPlugs
-		if (fst[i] && fst[i]->state->state != FST_NA)
+		// Do not update state for inactive Units
+		if (fst[i] && fst[i]->state->state != UNIT_NA)
 			*song->fst_state[i] = *fst[i]->state;
 	}
 }
