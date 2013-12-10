@@ -25,7 +25,7 @@ int rc = 1;
 struct box {
 	struct box* next;
 	CDKLABEL *label;
-	uint8_t fstid;
+	uint8_t unitid;
 };
 
 struct light {
@@ -152,11 +152,11 @@ static int get_value_dialog ( char *title, char *label, char **values, int defau
 
 static int edit_selector ( FHCTRL* fhctrl ) {
 	unsigned short i, count, plug;
-	Unit** fst = fhctrl->fst;
+	Unit** unit = fhctrl->unit;
 	Unit* fp;
 	UnitState* fs;
 	char *values[128];
-	unsigned short valfstmap[128];
+	unsigned short valunitmap[128];
 
 	/* New temporary state */
 	fs = state_new();
@@ -166,14 +166,14 @@ static int edit_selector ( FHCTRL* fhctrl ) {
 
 	/* Select Plugin */
 	for (i=0, count=0; i < 128; i++) {
-		if (! (fp = fst[i]) ) continue;
-		valfstmap[count] = i;
+		if (! (fp = unit[i]) ) continue;
+		valunitmap[count] = i;
 		snprintf(values[count++], 40, "<C>%s", fp->name);
 	}
 	if (count == 0) return 0;
 	plug = get_value_dialog ("Select device", "Device", values, 0, count);
 	if (!plug) return 0;
-	fp = fst[ valfstmap[--plug] ];
+	fp = unit[ valunitmap[--plug] ];
 
 	/* Select State */
 	snprintf(values[0], 40, "<C>Bypass");
@@ -204,7 +204,7 @@ static int edit_selector ( FHCTRL* fhctrl ) {
 
 	*fp->state = *fs;
 
-	fhctrl_fst_send ( fhctrl, fp, "GUI" );
+	fhctrl_unit_send ( fhctrl, fp, "GUI" );
 	send_dump_request ( fhctrl, fp->id );
 
 	return 1;
@@ -293,7 +293,7 @@ struct box* box_new ( struct box** first, int x, int y ) {
 	}
 
 	new->next = NULL;
-	new->fstid = 0;
+	new->unitid = 0;
 
 	return new;
 }
@@ -312,15 +312,15 @@ short box_init ( struct box** first ) {
 }
 
 /* Return true if something changed */
-static bool box_bind_to_fst ( struct box* box_first, Unit** fst ) {
+static bool box_bind_to_unit ( struct box* box_first, Unit** unit ) {
 	bool ret = false;
 	Unit *fp;
 	struct box* box;
-	for ( fp = fst_next(fst,NULL), box = box_first;
+	for ( fp = unit_next(unit,NULL), box = box_first;
 	      fp && box;
-	      fp = fst_next(fst,fp), box = box->next
+	      fp = unit_next(unit,fp), box = box->next
 	) {
-		if ( fp->change || box->fstid != fp->id ) {
+		if ( fp->change || box->unitid != fp->id ) {
 			fp->change = false;
 			box_update ( box, fp );
 			ret = true;
@@ -431,7 +431,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 	/* Main loop */
 	bool need_redraw = true;
 	while ( true ) {
-		if ( box_bind_to_fst ( box_first, fhctrl->fst ) )
+		if ( box_bind_to_unit ( box_first, fhctrl->unit ) )
 			fhctrl->gui.lcd_need_update = true;
 
 		fhctrl_idle ( fhctrl );
@@ -469,13 +469,13 @@ void nfhc ( FHCTRL* fhctrl ) {
 			case 'u': // Update Song
 				setCDKScrollHighlight(song_list, A_REVERSE);
 				r = activateCDKScroll(song_list, NULL);
-				song_update( song_get( fhctrl->songs, r), fhctrl->fst );
+				song_update( song_get( fhctrl->songs, r), fhctrl->unit );
 				setCDKScrollHighlight (song_list, A_NORMAL);
 				break;
 			case 'i': send_ident_request( fhctrl ); break;
 			case 'n': // New song
 				need_redraw = true;
-				Song *song = song_new (fhctrl->songs, fhctrl->fst);
+				Song *song = song_new (fhctrl->songs, fhctrl->unit);
 				change_song_name ( song_list, fhctrl->songs, song );
 				break;
 			case 'g': // Change song name

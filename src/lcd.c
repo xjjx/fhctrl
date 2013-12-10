@@ -14,13 +14,13 @@ void init_lcd( struct LCDScreen* lcd_screen ) {
 	lcd_text(0,0,lcdline);
 	snprintf(lcdline, 16, "says HELLO");
 	lcd_text(0,1,lcdline);
-	lcd_screen->fst = NULL;
+	lcd_screen->unit = NULL;
 }
 
 void update_lcd( struct LCDScreen* lcd_screen ) {
 	if (! lcd_screen->available) return;
 
-	Unit* fp = lcd_screen->fst;
+	Unit* fp = lcd_screen->unit;
 	if(!fp) return;
 
 	char line[24];
@@ -35,7 +35,7 @@ void update_lcd( struct LCDScreen* lcd_screen ) {
 	lcd_text(0,2,fp->name);			// Line 3
 }
 
-void lcd_set_current_fst ( struct LCDScreen* lcd_screen, Unit* fp ) {
+void lcd_set_current_unit ( struct LCDScreen* lcd_screen, Unit* fp ) {
 	if ( ! lcd_screen->available ) return;
-	lcd_screen->fst = fp;
+	lcd_screen->unit = fp;
 }

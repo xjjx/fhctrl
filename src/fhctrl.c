@@ -29,7 +29,7 @@
 /* From lcd.c */
 extern void init_lcd( struct LCDScreen* lcd_screen );
 extern void update_lcd( struct LCDScreen* lcd_screen );
-extern void lcd_set_current_fst ( struct LCDScreen* lcd_screen, Unit* fp );
+extern void lcd_set_current_unit ( struct LCDScreen* lcd_screen, Unit* fp );
 
 /* ftdi.h */
 extern void lcd_close();
@@ -40,7 +40,7 @@ bool load_state( FHCTRL* fhctrl, const char* config_file );
 
 /* Functions */
 void send_ident_request ( FHCTRL* fhctrl ) {
-	fst_reset_to_na ( fhctrl->fst );
+	unit_reset_to_na ( fhctrl->unit );
 
 	FJACK* fjack = (FJACK*) fhctrl->user;
 	fjack_send_ident_request ( fjack );
@@ -55,7 +55,7 @@ static void inline
 send_offer ( FHCTRL* fhctrl, SysExIdentReply* reply ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
-	uint8_t uuid = fst_uniqe_id (fhctrl->fst, fhctrl->offered_last + 1);
+	uint8_t uuid = unit_uniqe_id (fhctrl->unit, fhctrl->offered_last + 1);
 	if ( uuid == 0 ) return; /* No more free id ? :-( */
 
 	fjack_send_offer ( fjack, reply, uuid );
@@ -64,7 +64,7 @@ send_offer ( FHCTRL* fhctrl, SysExIdentReply* reply ) {
 	fhctrl->offered_last = uuid;
 }
 
-void fhctrl_fst_send ( FHCTRL* fhctrl, Unit* fp, const char* logFuncName ) {
+void fhctrl_unit_send ( FHCTRL* fhctrl, Unit* fp, const char* logFuncName ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
 	switch ( fp->type ) {
@@ -79,7 +79,7 @@ void fhctrl_fst_send ( FHCTRL* fhctrl, Unit* fp, const char* logFuncName ) {
 	case UNIT_TYPE_PLUGIN: ;
 		// If unit is NA then keep it state and skip sending
 		SysExDumpV1 sysex = SYSEX_DUMP;
-		fst_set_sysex ( fp, &sysex );
+		unit_set_sysex ( fp, &sysex );
 		fjack_send ( fjack, &sysex, sizeof sysex, logFuncName, fp->id );
 		break;
 	}
@@ -96,14 +96,14 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 	// Dump states via SysEx - for all FST
 	short i;
 	for (i=0; i < 128; i++) {
-		Unit* fp = fhctrl->fst[i];
+		Unit* fp = fhctrl->unit[i];
 		if ( ! fp ) continue;
 
 		/* Save current state */
 		enum State curState = fp->state->state;
 
 		// If unit state in song is NA do not copy plugin state
-		UnitState* songFS = song->fst_state[i];
+		UnitState* songFS = song->unit_state[i];
 		if ( songFS->state == UNIT_NA ) {
 			switch ( fp->type ) {
 			case UNIT_TYPE_PLUGIN:
@@ -130,7 +130,7 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 			//       cause they can't be discovered
 			fp->state->state = UNIT_NA;
 		} else {
-			fhctrl_fst_send ( fhctrl, fp, "SongSend" );
+			fhctrl_unit_send ( fhctrl, fp, "SongSend" );
 		}
 		fp->change = true; // Update display
 	}
@@ -205,7 +205,7 @@ fhctrl_handle_ident_reply ( FHCTRL* fhctrl, SysExIdentReply* r ) {
 			send_offer ( fhctrl, r );
 		} else {
 			// Note: we refresh GUI when dump back to us
-			Unit* fp = fst_get ( fhctrl->fst, fhctrl->songs, r->model[0] );
+			Unit* fp = unit_get ( fhctrl->unit, fhctrl->songs, r->model[0] );
 			fp->type = UNIT_TYPE_PLUGIN; // We just know this ;-)
 			send_dump_request (fhctrl, fp->id);
 		}
@@ -221,10 +221,10 @@ fhctrl_handle_sysex_dump ( FHCTRL* fhctrl, SysExDumpV1* sysex ) {
 	}
 
 	/* This also create new Unit if needed */
-	/* FIXME: this use fst_new which can use calloc for new units */
-	Unit* fp = fst_get_from_sysex ( fhctrl->fst, fhctrl->songs, sysex );
+	/* FIXME: this use unit_new which can use calloc for new units */
+	Unit* fp = unit_get_from_sysex ( fhctrl->unit, fhctrl->songs, sysex );
 
-	lcd_set_current_fst ( &fhctrl->lcd_screen, fp );
+	lcd_set_current_unit ( &fhctrl->lcd_screen, fp );
 }
 
 static inline void
@@ -383,7 +383,7 @@ void fhctrl_idle ( FHCTRL* fhctrl ) {
 		// NOTE: don't trigger for non-sysex units
 		if ( fhctrl->graph_order_changed > 0 &&
 		     --(fhctrl->graph_order_changed) == 0 &&
-		     fst_is_any_na ( fhctrl->fst )
+		     unit_is_any_na ( fhctrl->unit )
 		) send_ident_request ( fhctrl );
 
 		if (fhctrl->offered_last > 0) fhctrl->offered_last = 0;

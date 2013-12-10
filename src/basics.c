@@ -24,7 +24,7 @@ UnitState* state_new() {
 }
 
 /****************** FST ****************************************/
-void fst_new ( Unit** fst, Song** songs, uint8_t uuid ) {
+void unit_new ( Unit** unit, Song** songs, uint8_t uuid ) {
 	Unit* f = malloc(sizeof(Unit));
 	snprintf(f->name, sizeof f->name, "Device%d", uuid);
 	f->id = uuid;
@@ -35,35 +35,35 @@ void fst_new ( Unit** fst, Song** songs, uint8_t uuid ) {
 	// Add states to songs
 	Song* s;
 	for(s = song_first(songs); s; s = s->next)
-		s->fst_state[uuid] = state_new();
+		s->unit_state[uuid] = state_new();
 
 	// Fill our global array
-	fst[uuid] = f;
+	unit[uuid] = f;
 }
 
-uint8_t fst_uniqe_id ( Unit** fst, uint8_t start ) {
+uint8_t unit_uniqe_id ( Unit** unit, uint8_t start ) {
 	uint8_t i = start;
-	for( ; i < 128; i++) if (!fst[i]) return i;
+	for( ; i < 128; i++) if (!unit[i]) return i;
 	return 0; // 0 mean error
 }
 
-Unit* fst_get ( Unit** fst, Song** songs, uint8_t uuid ) {
-	if (fst[uuid] == NULL) fst_new( fst, songs, uuid);
-	return fst[uuid];
+Unit* unit_get ( Unit** unit, Song** songs, uint8_t uuid ) {
+	if (unit[uuid] == NULL) unit_new( unit, songs, uuid);
+	return unit[uuid];
 }
 
-Unit* fst_next ( Unit** fst, Unit* prev ) {
+Unit* unit_next ( Unit** unit, Unit* prev ) {
 	Unit* fp;
 	uint8_t i = (prev == NULL) ? 0 : prev->id + 1;
 	while ( i < 128 ) {
-		fp = fst[i];
+		fp = unit[i];
 		if (fp) return fp;
 		i++;
 	}
 	return NULL;
 }
 
-void fst_set_sysex ( Unit* fp, SysExDumpV1* sysex ) {
+void unit_set_sysex ( Unit* fp, SysExDumpV1* sysex ) {
 	UnitState* fs = fp->state;
 
         sysex->uuid = fp->id;
@@ -77,8 +77,8 @@ void fst_set_sysex ( Unit* fp, SysExDumpV1* sysex ) {
         memcpy(sysex->plugin_name, fp->name, sizeof(sysex->plugin_name));
 }
 
-Unit* fst_get_from_sysex ( Unit** fst, Song** songs, SysExDumpV1* sysex ) {
-	Unit* fp = fst_get( fst, songs, sysex->uuid );
+Unit* unit_get_from_sysex ( Unit** unit, Song** songs, SysExDumpV1* sysex ) {
+	Unit* fp = unit_get( unit, songs, sysex->uuid );
 	UnitState* fs = fp->state;
 
 	fp->type = UNIT_TYPE_PLUGIN; // We just know this ;-)
@@ -95,10 +95,10 @@ Unit* fst_get_from_sysex ( Unit** fst, Song** songs, SysExDumpV1* sysex ) {
 	return fp;
 }
 
-void fst_reset_to_na ( Unit** fst ) {
+void unit_reset_to_na ( Unit** unit ) {
 	uint8_t i;
 	for ( i=0; i < 128; i++ ) {
-		Unit* fp = fst[i];
+		Unit* fp = unit[i];
 		if ( ! fp ) continue;
 
 		// NOTE: non-sysex devices doesn't handle IdentRequest
@@ -107,10 +107,10 @@ void fst_reset_to_na ( Unit** fst ) {
 	}
 }
 
-bool fst_is_any_na ( Unit** fst ) {
+bool unit_is_any_na ( Unit** unit ) {
 	uint8_t i;
 	for (i=0; i < 128; i++) {
-		Unit* fp = fst[i];
+		Unit* fp = unit[i];
 		if ( ! fp ) continue;
 
 		if ( fp->type != UNIT_TYPE_DEVICE && 
@@ -121,17 +121,17 @@ bool fst_is_any_na ( Unit** fst ) {
 }
 
 /****************** SONG ****************************************/
-Song* song_new ( Song** songs, Unit** fst) {
+Song* song_new ( Song** songs, Unit** unit) {
 	uint8_t i;
 	Song* s = calloc(1, sizeof(Song));
 
 	//LOG("Creating new song");
 	// Add state for already known plugins
 	for(i=0; i < 128; i++) {
-		if (fst[i] == NULL) continue;
+		if (unit[i] == NULL) continue;
 
-		s->fst_state[i] = state_new();
-		*s->fst_state[i] = *fst[i]->state;
+		s->unit_state[i] = state_new();
+		*s->unit_state[i] = *unit[i]->state;
 	}
 
 	snprintf(s->name, sizeof s->name, "Song %d", song_count(songs) );
@@ -161,7 +161,7 @@ short song_count ( Song** songs ) {
 	return count;
 }
 
-void song_update ( Song* song, Unit** fst ) {
+void song_update ( Song* song, Unit** unit ) {
 	if ( ! song ) {
 		LOG("SongUpdate: no such song");
 		return;
@@ -170,7 +170,7 @@ void song_update ( Song* song, Unit** fst ) {
 	uint8_t i;
 	for(i=0; i < 128; i++) {
 		// Do not update state for inactive Units
-		if (fst[i] && fst[i]->state->state != UNIT_NA)
-			*song->fst_state[i] = *fst[i]->state;
+		if (unit[i] && unit[i]->state->state != UNIT_NA)
+			*song->unit_state[i] = *unit[i]->state;
 	}
 }

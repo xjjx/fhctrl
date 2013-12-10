@@ -37,26 +37,26 @@ typedef struct _Unit {
 
 typedef struct _Song {
         char name[24];
-        struct _UnitState* fst_state[127];
+        struct _UnitState* unit_state[127];
         struct _Song* next;
 } Song;
 
 /****************** STATE **************************************/
 UnitState* state_new();
 /****************** FST ****************************************/
-void fst_new ( Unit** fst, Song** songs, uint8_t uuid );
-uint8_t fst_uniqe_id ( Unit** fst, uint8_t start );
-Unit* fst_get ( Unit** fst, Song** songs, uint8_t uuid );
-Unit* fst_next ( Unit** fst, Unit* prev );
-void fst_set_sysex ( Unit* fp, SysExDumpV1* sysex );
-Unit* fst_get_from_sysex ( Unit** fst, Song** songs, SysExDumpV1* sysex );
-bool fst_is_any_na ( Unit** fst );
-void fst_reset_to_na ( Unit** fst );
+void unit_new ( Unit** unit, Song** songs, uint8_t uuid );
+uint8_t unit_uniqe_id ( Unit** unit, uint8_t start );
+Unit* unit_get ( Unit** unit, Song** songs, uint8_t uuid );
+Unit* unit_next ( Unit** unit, Unit* prev );
+void unit_set_sysex ( Unit* fp, SysExDumpV1* sysex );
+Unit* unit_get_from_sysex ( Unit** unit, Song** songs, SysExDumpV1* sysex );
+bool unit_is_any_na ( Unit** unit );
+void unit_reset_to_na ( Unit** unit );
 /****************** SONG ****************************************/
-Song* song_new(Song** songs, Unit** fst);
+Song* song_new(Song** songs, Unit** unit);
 Song* song_get(Song** songs, short SongNumber);
 static inline Song* song_first ( Song** songs ) { return *songs; }
 short song_count( Song** songs );
-void song_update(Song* song, Unit** fst);
+void song_update(Song* song, Unit** unit);
 
 #endif /* __basics_h__ */
