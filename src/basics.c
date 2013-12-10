@@ -66,15 +66,15 @@ Unit* unit_next ( Unit** unit, Unit* prev ) {
 void unit_set_sysex ( Unit* fp, SysExDumpV1* sysex ) {
 	UnitState* fs = fp->state;
 
-        sysex->uuid = fp->id;
-        sysex->program = fs->program;
-        sysex->channel = fs->channel;
-        sysex->volume = fs->volume;
-        sysex->state = fs->state;
+	sysex->uuid = fp->id;
+	sysex->program = fs->program;
+	sysex->channel = fs->channel;
+	sysex->volume = fs->volume;
+	sysex->state = fs->state;
                 
-        /* NOTE: FSTHost ignore incoming strings anyway */
-        memcpy(sysex->program_name, fs->program_name, sizeof(sysex->program_name));
-        memcpy(sysex->plugin_name, fp->name, sizeof(sysex->plugin_name));
+	/* NOTE: FSTHost ignore incoming strings anyway */
+	memcpy(sysex->program_name, fs->program_name, sizeof(sysex->program_name));
+	memcpy(sysex->plugin_name, fp->name, sizeof(sysex->plugin_name));
 }
 
 Unit* unit_get_from_sysex ( Unit** unit, Song** songs, SysExDumpV1* sysex ) {
