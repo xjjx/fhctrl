@@ -303,8 +303,6 @@ fjack_in_port_handling ( FJACK* j, jack_nframes_t frames ) {
 
 //		collect_rt_logs(j, "MIDI: %X", event.buffer[0]);
 
-		if ( ctrl_channel_handling ( fhctrl, event.buffer ) ) continue;
-
 		/* Is this sysex message ? */
 		if ( event.size < 5 || event.buffer[0] != SYSEX_BEGIN ) continue;
 		fhctrl->gui.sysex_midi_in = true;
