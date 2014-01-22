@@ -274,10 +274,11 @@ fjack_forward_port_handling ( FJACK* j, jack_nframes_t frames ) {
 		jack_midi_event_t event;
 		if (jack_midi_event_get (&event, inbuf, i) != 0) break;
 
-		if ( ctrl_channel_handling ( fhctrl, event.buffer ) ) continue;
+		/* Filter out active sensing */
+		if ( event.buffer[0] == 0xFE ) continue;
 
-		/* Filer out unneded messages - mostly active sensing */
-		if ( event.buffer[0] > 0xEF || event.buffer[0] < 0x80 ) continue;
+		/* Process and filter out our messages */
+		if ( ctrl_channel_handling ( fhctrl, event.buffer ) ) continue;
 
 		fhctrl->gui.midi_in = true;
 		if ( jack_midi_event_write(outbuf, event.time, event.buffer, event.size) ) {
