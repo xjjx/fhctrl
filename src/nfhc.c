@@ -20,8 +20,6 @@
 #define BOX_HEIGHT	4	/* Label Box height */
 #define LABEL_LENGHT BOX_WIDTH + 11 /* TODO: what it is ;-) */
 
-int rc = 1;
-
 struct box {
 	struct box* next;
 	CDKLABEL *label;
