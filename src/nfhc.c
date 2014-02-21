@@ -87,7 +87,7 @@ static void show_log () {
 	destroyCDKViewer ( viewer);
 }
 
-void refresh_song_list ( CDKSCROLL* sl, Song** songs ) {
+static void refresh_song_list ( CDKSCROLL* sl, Song** songs ) {
 	/* Clear List */
 	setCDKScrollItems ( sl, NULL, 0, FALSE );
 
@@ -97,8 +97,8 @@ void refresh_song_list ( CDKSCROLL* sl, Song** songs ) {
 		addCDKScrollItem ( sl, song->name );
 }
 
-static void change_song_name ( CDKSCROLL* sl, Song** songs, Song *song ) {
-	if (! song) return;
+static bool change_song_name ( CDKSCROLL* sl, Song *song ) {
+	if (! song) return false;
 
 	const char *title = "Change Song name";
 	char ttitle[20];
@@ -110,12 +110,14 @@ static void change_song_name ( CDKSCROLL* sl, Song** songs, Song *song ) {
 	setCDKEntryValue ( entry, song->name );
 	drawCDKEntry ( entry, TRUE );
 	char* value = activateCDKEntry ( entry, NULL );
-	if ( value && strcmp(song->name, value) ) {
-		strncpy( song->name, value, sizeof (song->name) );
-		refresh_song_list ( sl, songs ); 
+	if ( ! value || !strcmp(song->name, value) ) {
+		destroyCDKEntry ( entry );
+		return false;
 	}
 
+	strncpy( song->name, value, sizeof (song->name) );
 	destroyCDKEntry ( entry );
+	return true;
 }
 
 static int get_value_dialog ( char *title, char *label, char **values, int default_value, int count) {
@@ -458,6 +460,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 		int c = wgetch(top_logo->win);
 		switch (c) {
 			short r;
+			Song* song = NULL;
 			case 'q': goto cleanup;
 		 	case 's': // Set Song
 				setCDKScrollHighlight(song_list, A_REVERSE);
@@ -466,21 +469,24 @@ void nfhc ( FHCTRL* fhctrl ) {
 				setCDKScrollHighlight(song_list, A_NORMAL);
 				break;
 			case 'u': // Update Song
-				setCDKScrollHighlight(song_list, A_REVERSE);
-				r = activateCDKScroll(song_list, NULL);
-				song_update( song_get( fhctrl->songs, r), fhctrl->unit );
+				r = getCDKScrollCurrent ( song_list );
+				song = song_get( fhctrl->songs, r);
+				song_update( song, fhctrl->unit );
 				setCDKScrollHighlight (song_list, A_NORMAL);
 				break;
 			case 'i': send_ident_request( fhctrl ); break;
 			case 'n': // New song
+				song = song_new (fhctrl->songs, fhctrl->unit);
+				change_song_name ( song_list, song );
+				refresh_song_list ( song_list, fhctrl->songs ); 
 				need_redraw = true;
-				Song *song = song_new (fhctrl->songs, fhctrl->unit);
-				change_song_name ( song_list, fhctrl->songs, song );
 				break;
 			case 'g': // Change song name
-				need_redraw = true;
 				r = getCDKScrollCurrent ( song_list );
-				change_song_name ( song_list, fhctrl->songs, song_get ( fhctrl->songs, r ) );
+				song = song_get ( fhctrl->songs, r );
+				if ( change_song_name ( song_list, song ) )
+					refresh_song_list ( song_list, fhctrl->songs ); 
+				need_redraw = true;
 				break;
 			case 'w': update_config( fhctrl ); break; // Update config file
 			case 'e': // Edit unit
