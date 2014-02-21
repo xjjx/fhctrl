@@ -188,11 +188,13 @@ int cpu_load( FHCTRL* fhctrl ) {
 // Midi control channel handling - true if handled
 static inline bool
 ctrl_channel_handling ( FHCTRL* fhctrl, jack_midi_data_t data[] ) {
+	// Don't process realitime messages
+	if ( data[0] > 0xEF ) return false;
+	// Don't process not our channel
 	if ( (data[0] & 0x0F) != CTRL_CHANNEL ) return false;
-
-	// Don't shine for realitime messages
-	if ( data[0] < 0xF0 ) fhctrl->gui.ctrl_midi_in = true;
-
+	// Shine
+	fhctrl->gui.ctrl_midi_in = true;
+	// Change song
 	if ( (data[0] & 0xF0) == 0xC0 ) fhctrl_song_send( fhctrl, data[1] );
 	return true;
 }
@@ -268,8 +270,8 @@ fjack_forward_port_handling ( FJACK* j, jack_nframes_t frames ) {
 	assert (outbuf);
 	jack_midi_clear_buffer(outbuf);
 
-	jack_nframes_t i, count;
-	count = jack_midi_get_event_count (inbuf);
+	jack_nframes_t count = jack_midi_get_event_count (inbuf);
+	jack_nframes_t i;
 	for (i = 0; i < count; ++i) {
 		jack_midi_event_t event;
 		if (jack_midi_event_get (&event, inbuf, i) != 0) break;
