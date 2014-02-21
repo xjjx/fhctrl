@@ -6,6 +6,8 @@
 #include "sysex.h"
 #include "log.h"
 
+#define MAX_UNITS 128
+
 /* externs - for now */
 extern int process (jack_nframes_t frames, void* arg);
 extern int graph_order_callback_handler ( void *arg );
@@ -138,11 +140,11 @@ void fjack_init ( FJACK* fjack, const char* client_name, void* user_ptr ) {
 	fjack->user = user_ptr;
 
 	// Init log collector
-	fjack->log_collector = jack_ringbuffer_create(127 * 50 * sizeof(char));
+	fjack->log_collector = jack_ringbuffer_create(MAX_UNITS * 50 * sizeof(char));
 	jack_ringbuffer_mlock( fjack->log_collector );
 
 	// Init MIDI Out buffer
-	fjack->buffer_midi_out = jack_ringbuffer_create(127 * SYSEX_MAX_SIZE);
+	fjack->buffer_midi_out = jack_ringbuffer_create(MAX_UNITS * SYSEX_MAX_SIZE);
 	jack_ringbuffer_mlock( fjack->buffer_midi_out );
 
 	// Init Jack

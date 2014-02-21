@@ -12,6 +12,12 @@
 
 #include "sysex.h"
 
+/* NOTE: Currently ID is one 7-bit MIDI packet,
+         so 128 is limit for addressing UNITs ( PLUGIN TYPE ),
+         while DEVICES are already limited to 16 MIDI channels
+*/
+#define MAX_UNITS 128
+
 enum State {
 	UNIT_STATE_BYPASS = 0,
 	UNIT_STATE_ACTIVE = 1,
@@ -19,26 +25,26 @@ enum State {
 };
 
 typedef struct _UnitState {
-        enum State state;
-        uint8_t program; /* 0 - 127 */
-        uint8_t channel; /* 0 - 17 */
-        uint8_t volume; /* 0 - 127 */
-        char program_name[24];
+	enum State state;
+	uint8_t program; /* 0 - 127 */
+	uint8_t channel; /* 0 - 17 */
+	uint8_t volume; /* 0 - 127 */
+	char program_name[24];
 } UnitState;
 
 enum Type { UNIT_TYPE_PLUGIN, UNIT_TYPE_DEVICE };
 typedef struct _Unit {
-        uint8_t id; /* 0 - 127 */
-        char name[24];
+	uint8_t id; /* 0 - 127 */
+	char name[24];
 	enum Type type;
 	bool change;
-       	UnitState* state;
+	UnitState* state;
 } Unit;
 
 typedef struct _Song {
-        char name[24];
-        struct _UnitState* unit_state[127];
-        struct _Song* next;
+	char name[24];
+	struct _UnitState* unit_state[MAX_UNITS];
+	struct _Song* next;
 } Song;
 
 /****************** STATE **************************************/

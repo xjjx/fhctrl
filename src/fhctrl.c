@@ -95,7 +95,7 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 
 	// Dump states via SysEx - for all FST
 	short i;
-	for (i=0; i < 128; i++) {
+	for (i=0; i < MAX_UNITS; i++) {
 		Unit* fp = fhctrl->unit[i];
 		if ( ! fp ) continue;
 

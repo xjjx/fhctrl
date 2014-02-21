@@ -168,7 +168,8 @@ static int edit_selector ( FHCTRL* fhctrl ) {
 	for (i=0, count=0; i < 128; i++) {
 		if (! (fp = unit[i]) ) continue;
 		valunitmap[count] = i;
-		snprintf(values[count++], 40, "<C>%s", fp->name);
+		snprintf(values[count], 40, "<C>%s", fp->name);
+		count++;
 	}
 	if (count == 0) return 0;
 	plug = get_value_dialog ("Select device", "Device", values, 0, count);
@@ -196,7 +197,7 @@ static int edit_selector ( FHCTRL* fhctrl ) {
 
 	/* Select Volume */
 	if ( fp->type == UNIT_TYPE_PLUGIN ) {
-		for (i=0, count=0; i < 128; i++) snprintf(values[count++], 40, "<C>%d", i);
+		for (i=0, count=0; i < MAX_UNITS; i++) snprintf(values[count++], 40, "<C>%d", i);
 		fs->volume = get_value_dialog ("Select volume", "Volume", values, fp->state->volume, count);
 		if (!fs->volume) return 0;
 		--fs->volume;
@@ -410,7 +411,7 @@ void nfhc ( FHCTRL* fhctrl ) {
 		A_REVERSE|' ', SONGWIN_WIDTH, 0, 0, 100, 1, 10, TRUE, FALSE
 	);
 	
-	/* Create Song List */
+	/* Song List */
 	CDKSCROLL *song_list = newCDKScroll (
 		cdkscreen, left_margin, LOGO_HEIGHT, RIGHT, SONGWIN_HEIGHT, SONGWIN_WIDTH,
 		"</U/63>Select song:<!05>", 0, 0, FALSE, A_NORMAL, TRUE, FALSE

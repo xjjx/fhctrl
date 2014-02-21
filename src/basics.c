@@ -43,7 +43,7 @@ void unit_new ( Unit** unit, Song** songs, uint8_t uuid ) {
 
 uint8_t unit_uniqe_id ( Unit** unit, uint8_t start ) {
 	uint8_t i = start;
-	for( ; i < 128; i++) if (!unit[i]) return i;
+	for( ; i < MAX_UNITS; i++) if (!unit[i]) return i;
 	return 0; // 0 mean error
 }
 
@@ -55,7 +55,7 @@ Unit* unit_get ( Unit** unit, Song** songs, uint8_t uuid ) {
 Unit* unit_next ( Unit** unit, Unit* prev ) {
 	Unit* fp;
 	uint8_t i = (prev == NULL) ? 0 : prev->id + 1;
-	while ( i < 128 ) {
+	while ( i < MAX_UNITS ) {
 		fp = unit[i];
 		if (fp) return fp;
 		i++;
@@ -97,7 +97,7 @@ Unit* unit_get_from_sysex ( Unit** unit, Song** songs, SysExDumpV1* sysex ) {
 
 void unit_reset_to_na ( Unit** unit ) {
 	uint8_t i;
-	for ( i=0; i < 128; i++ ) {
+	for ( i=0; i < MAX_UNITS; i++ ) {
 		Unit* fp = unit[i];
 		if ( ! fp ) continue;
 
@@ -109,7 +109,7 @@ void unit_reset_to_na ( Unit** unit ) {
 
 bool unit_is_any_na ( Unit** unit ) {
 	uint8_t i;
-	for (i=0; i < 128; i++) {
+	for (i=0; i < MAX_UNITS; i++) {
 		Unit* fp = unit[i];
 		if ( ! fp ) continue;
 
@@ -127,7 +127,7 @@ Song* song_new ( Song** songs, Unit** unit) {
 
 	//LOG("Creating new song");
 	// Add state for already known plugins
-	for(i=0; i < 128; i++) {
+	for(i=0; i < MAX_UNITS; i++) {
 		if (unit[i] == NULL) continue;
 
 		s->unit_state[i] = state_new();
@@ -168,7 +168,7 @@ void song_update ( Song* song, Unit** unit ) {
 	}
 
 	uint8_t i;
-	for(i=0; i < 128; i++) {
+	for(i=0; i < MAX_UNITS; i++) {
 		// Do not update state for inactive Units
 		if (unit[i] && unit[i]->state->state != UNIT_NA)
 			*song->unit_state[i] = *unit[i]->state;

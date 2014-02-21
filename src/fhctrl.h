@@ -30,7 +30,7 @@ typedef struct _FHCTRL {
 	void*			user;
 
 	/* Public variables */
-	Unit*		unit[128];
+	Unit*			unit[MAX_UNITS];
 	Song**			songs;
 	struct CDKGUI		gui;
 	struct LCDScreen	lcd_screen;

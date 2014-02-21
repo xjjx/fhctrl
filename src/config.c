@@ -14,7 +14,7 @@ bool dump_state( FHCTRL* fhctrl, const char* config_file ) {
 	// Save plugs
 	config_setting_t* group = config_setting_add(cfg.root, "global", CONFIG_TYPE_GROUP);
 	short i;
-	for (i = 0; i < 128; i++) {
+	for (i = 0; i < MAX_UNITS; i++) {
 		Unit* fp = fhctrl->unit[i];
 		if ( ! fp ) continue;
 
@@ -35,7 +35,7 @@ bool dump_state( FHCTRL* fhctrl, const char* config_file ) {
 
 		config_setting_t* song_name = config_setting_add(group, "name", CONFIG_TYPE_STRING);
 		config_setting_set_string( song_name, s->name );
-		for (i = 0; i < 128; i++) {
+		for (i = 0; i < MAX_UNITS; i++) {
 			Unit* fp = fhctrl->unit[i];
 			if ( ! fp ) continue;
 
