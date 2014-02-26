@@ -201,15 +201,26 @@ ctrl_channel_handling ( FHCTRL* fhctrl, jack_midi_data_t data[] ) {
 
 static inline void
 fhctrl_handle_ident_reply ( FHCTRL* fhctrl, SysExIdentReply* r ) {
+	FJACK* fjack = (FJACK*) fhctrl->user;
+
 	// If this is Unit then try to deal with him ;-)
 	if ( r->id == SYSEX_MYID ) {
-		if ( r->model[0] == 0 ) {
+		uint8_t UnitID = r->model[0];
+		if ( UnitID == 0 ) {
 			send_offer ( fhctrl, r );
 		} else {
 			// Note: we refresh GUI when dump back to us
-			Unit* fp = unit_get ( fhctrl->unit, fhctrl->songs, r->model[0] );
+			Unit* fp = unit_get ( fhctrl->unit, fhctrl->songs, UnitID );
 			fp->type = UNIT_TYPE_PLUGIN; // We just know this ;-)
-			send_dump_request (fhctrl, fp->id);
+
+			if ( fp->state->state == UNIT_NA ) {
+				// Unit is new or NA after ident request
+				send_dump_request (fhctrl, fp->id);
+			} else {
+				// Unit is avaiable while it sent ident reply ? try recover
+				collect_rt_logs(fjack, "IdentReply: recovering unit %X", fp->id);
+				fhctrl_unit_send ( fhctrl, fp, "IdentReply" );
+			}
 		}
 	} /* else { Regular device - not supported yet } */
 }
