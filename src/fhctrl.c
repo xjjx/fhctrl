@@ -7,7 +7,6 @@
 */
 
 #include <stdio.h>
-#include <stdarg.h>
 #include <assert.h>
 #include <signal.h>
 #include <string.h>
@@ -23,6 +22,7 @@
 #include "log.h"
 #include "sysex.h"
 
+#define WANT_SONG_NO 255
 #define CTRL_CHANNEL 15
 #define APP_NAME "FHControl"
 
@@ -86,12 +86,12 @@ void fhctrl_unit_send ( FHCTRL* fhctrl, Unit* fp, const char* logFuncName ) {
 }
 
 void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
-	FJACK* fjack = (FJACK*) fhctrl->user;
+	fhctrl->want_song = WANT_SONG_NO;
 
 	Song* song = song_get (fhctrl->songs, SongNumber);
 	if (!song) return;
-	
-	collect_rt_logs( fjack, "SendSong \"%s\"", song->name);
+
+	LOG ( "SendSong \"%s\"", song->name );
 
 	// Dump states via SysEx - for all FST
 	short i;
@@ -195,7 +195,7 @@ ctrl_channel_handling ( FHCTRL* fhctrl, jack_midi_data_t data[] ) {
 	// Shine
 	fhctrl->gui.ctrl_midi_in = true;
 	// Change song
-	if ( (data[0] & 0xF0) == 0xC0 ) fhctrl_song_send( fhctrl, data[1] );
+	if ( (data[0] & 0xF0) == 0xC0 ) fhctrl->want_song = data[1];
 	return true;
 }
 
@@ -368,6 +368,10 @@ void update_config (FHCTRL* fhctrl) {
 void fhctrl_idle ( FHCTRL* fhctrl ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
+	/* Change song */
+	if ( fhctrl->want_song != WANT_SONG_NO )
+		fhctrl_song_send ( fhctrl, fhctrl->want_song );
+
 	/* Update LCD */
 	if (fhctrl->gui.lcd_need_update) {
 		fhctrl->gui.lcd_need_update = false;
@@ -396,7 +400,9 @@ void fhctrl_idle ( FHCTRL* fhctrl ) {
 		if ( fhctrl->graph_order_changed > 0 &&
 		     --(fhctrl->graph_order_changed) == 0 &&
 		     unit_is_any_na ( fhctrl->unit )
-		) send_ident_request ( fhctrl );
+		) {
+			send_ident_request ( fhctrl );
+		}
 
 		if (fhctrl->offered_last > 0) fhctrl->offered_last = 0;
 	} else fhctrl->offered_last_choke--;
@@ -405,6 +411,7 @@ void fhctrl_idle ( FHCTRL* fhctrl ) {
 void fhctrl_init( FHCTRL* fhctrl, void* user_ptr ) {
 	fhctrl->user = user_ptr;
 	fhctrl->songs = &fhctrl->song_first;
+	fhctrl->want_song = WANT_SONG_NO;
 
 	/* try on start */
 	fhctrl->try_connect_to_physical = true;
@@ -412,6 +419,22 @@ void fhctrl_init( FHCTRL* fhctrl, void* user_ptr ) {
 	/* Try detect on start */
 	fhctrl->graph_order_changed = 1;
 }
+
+#ifndef GUI
+volatile bool quit;
+static void signal_handler (int signum) {
+	switch(signum) {
+	case SIGINT:
+		puts("Caught signal to terminate (SIGINT)");
+		quit = true;
+		break;
+	}
+}
+
+void justLOG ( char *msg, void *user_data ) {
+	puts ( msg );
+}
+#endif
 
 int main (int argc, char* argv[]) {
 	log_init ();
@@ -438,14 +461,34 @@ int main (int argc, char* argv[]) {
 	// Try read file
 	if (fhctrl.config_file) load_state( &fhctrl, fhctrl.config_file );
 
+#ifdef GUI
 	// ncurses GUI loop
 	nfhc(&fhctrl);
+#else
+	// Handling SIGINT for clean quit
+	struct sigaction sa;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sa.sa_handler = &signal_handler;
+	sigaction(SIGINT, &sa, NULL);
+
+	set_logcallback ( justLOG, NULL );
+
+	// loop
+	quit = false;
+	while ( ! quit ) {
+		fhctrl_idle ( &fhctrl );
+		sleep ( 1 );
+	}
+#endif
 
 	jack_deactivate ( fjack.client );
 	jack_client_close ( fjack.client );
 
 	// Close LCD
 	if (fhctrl.lcd_screen.available) lcd_close();
+
+	log_close ();
 
 	return 0;
 }

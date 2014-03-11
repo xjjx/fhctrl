@@ -26,10 +26,11 @@ typedef struct _FHCTRL {
 	uint8_t			offered_last;
 	uint8_t			offered_last_choke;
 	uint8_t			graph_order_changed;
+	uint8_t			want_song;
 	Song*			song_first;
 	void*			user;
 
-	/* Public variables */
+	/* Public variables - for GUI */
 	Unit*			unit[MAX_UNITS];
 	Song**			songs;
 	struct CDKGUI		gui;

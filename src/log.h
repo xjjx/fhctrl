@@ -4,6 +4,7 @@
 typedef void (*LOGCALLBACK)(char *msg, void *user_data);
 
 void log_init();
+void log_close ();
 void clear_log();
 const char* get_logpath ();
 void LOG(char *fmt, ...);

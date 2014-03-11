@@ -26,9 +26,8 @@ const char* get_logpath () {
 	return logfile;
 }
 
-void log_init () {
-	sem_init ( &logsema, 0 , 1 );
-}
+void log_init () { sem_init ( &logsema, 0 , 1 ); }
+void log_close () { sem_destroy ( &logsema ); }
 
 void LOG ( char *fmt, ... ) {
 	FILE *f = fopen( logfile , "a" );
@@ -46,14 +45,14 @@ void LOG ( char *fmt, ... ) {
 	fclose( f );
 
 	/* Send message to defined user callback ( e.g. nLOG ) */
-	sem_wait ( &logsema );
-	if ( logcallback != NULL && logcallback_user_data != NULL ) {
+	if ( logcallback != NULL ) {
 		char msg[256];
 		va_start ( args, fmt );
 		vsnprintf ( msg, sizeof msg, fmt, args );
 		va_end ( args );
-		void* ud = (void*) logcallback_user_data;
-		logcallback( msg, ud );
+
+		sem_wait ( &logsema );
+		logcallback( msg, (void*) logcallback_user_data );
+		sem_post ( &logsema );
 	}
-	sem_post ( &logsema );
 }
