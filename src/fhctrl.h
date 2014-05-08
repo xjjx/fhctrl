@@ -27,6 +27,7 @@ typedef struct _FHCTRL {
 	uint8_t			offered_last_choke;
 	uint8_t			graph_order_changed;
 	uint8_t			want_song;
+	uint8_t			want_song_choke;
 	Song*			song_first;
 	void*			user;
 

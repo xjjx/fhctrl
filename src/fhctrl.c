@@ -39,6 +39,14 @@ bool dump_state( FHCTRL* fhctrl, const char* config_file );
 bool load_state( FHCTRL* fhctrl, const char* config_file );
 
 /* Functions */
+static bool choke_check ( uint8_t* choke ) {
+	if ( *choke > 0 ) {
+		*choke--;
+		return true;
+	}
+	return false;
+}
+
 void send_ident_request ( FHCTRL* fhctrl ) {
 	unit_reset_to_na ( fhctrl->unit );
 
@@ -195,7 +203,10 @@ ctrl_channel_handling ( FHCTRL* fhctrl, jack_midi_data_t data[] ) {
 	// Shine
 	fhctrl->gui.ctrl_midi_in = true;
 	// Change song
-	if ( (data[0] & 0xF0) == 0xC0 ) fhctrl->want_song = data[1];
+	if ( (data[0] & 0xF0) == 0xC0 ) {
+		fhctrl->want_song_choke = 10;
+		fhctrl->want_song = data[1];
+	}
 	return true;
 }
 
@@ -369,8 +380,9 @@ void fhctrl_idle ( FHCTRL* fhctrl ) {
 	FJACK* fjack = (FJACK*) fhctrl->user;
 
 	/* Change song */
-	if ( fhctrl->want_song != WANT_SONG_NO )
-		fhctrl_song_send ( fhctrl, fhctrl->want_song );
+	if ( fhctrl->want_song != WANT_SONG_NO
+	  && choke_check ( &(fhctr->want_song_choke) )
+	) fhctrl_song_send ( fhctrl, fhctrl->want_song );
 
 	/* Update LCD */
 	if (fhctrl->gui.lcd_need_update) {
@@ -394,7 +406,7 @@ void fhctrl_idle ( FHCTRL* fhctrl ) {
 	get_rt_logs( fjack );
 
 	/* Clear last offered and detect N/A (with some choke) */
-	if (fhctrl->offered_last_choke == 0) {
+	if ( choke_check ( &(fhctrl->offered_last_choke) ) ) {
 		// Send SysEx Ident request if found some N/A units
 		// NOTE: don't trigger for non-sysex units
 		if ( fhctrl->graph_order_changed > 0 &&
@@ -405,7 +417,7 @@ void fhctrl_idle ( FHCTRL* fhctrl ) {
 		}
 
 		if (fhctrl->offered_last > 0) fhctrl->offered_last = 0;
-	} else fhctrl->offered_last_choke--;
+	};
 }
 
 void fhctrl_init( FHCTRL* fhctrl, void* user_ptr ) {
