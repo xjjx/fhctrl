@@ -42,9 +42,9 @@ bool load_state( FHCTRL* fhctrl, const char* config_file );
 static bool choke_check ( uint8_t* choke ) {
 	if ( *choke > 0 ) {
 		(*choke)--;
-		return true;
+		return false;
 	}
-	return false;
+	return true;
 }
 
 void send_ident_request ( FHCTRL* fhctrl ) {
