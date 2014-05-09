@@ -41,7 +41,7 @@ bool load_state( FHCTRL* fhctrl, const char* config_file );
 /* Functions */
 static bool choke_check ( uint8_t* choke ) {
 	if ( *choke > 0 ) {
-		*choke--;
+		(*choke)--;
 		return true;
 	}
 	return false;
@@ -381,7 +381,7 @@ void fhctrl_idle ( FHCTRL* fhctrl ) {
 
 	/* Change song */
 	if ( fhctrl->want_song != WANT_SONG_NO
-	  && choke_check ( &(fhctr->want_song_choke) )
+	  && choke_check ( &(fhctrl->want_song_choke) )
 	) fhctrl_song_send ( fhctrl, fhctrl->want_song );
 
 	/* Update LCD */
