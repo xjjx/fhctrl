@@ -94,10 +94,10 @@ void connect_to_physical ( FJACK* fjack ) {
 	jports = jack_get_ports(fjack->client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
 	if (! jports) return;
 	
-	const char *pname = jack_port_name( fjack->fin );
+	const char *pname = jack_port_name( fjack->in );
 	int i;
 	for (i=0; jports[i]; i++) {
-		if ( jack_port_connected_to ( fjack->fin, jports[i]) ) continue;
+		if ( jack_port_connected_to ( fjack->in, jports[i]) ) continue;
 		jack_connect(fjack->client, jports[i], pname);
 		LOG("%s -> %s\n", pname, jports[i]);
 	}
@@ -164,9 +164,7 @@ void fjack_init ( FJACK* fjack, const char* client_name, void* user_ptr ) {
 	fjack->sample_rate = jack_get_sample_rate(fjack->client);
 
 	fjack->in = jack_port_register (fjack->client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	fjack->fin = jack_port_register (fjack->client, "forward_input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 	fjack->out = jack_port_register (fjack->client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
-	fjack->fout = jack_port_register (fjack->client, "forward_output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 
 	jack_set_process_callback(fjack->client, process, fjack);
 	jack_set_session_callback(fjack->client, session_callback_handler, fjack);

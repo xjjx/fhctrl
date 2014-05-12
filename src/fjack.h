@@ -14,8 +14,6 @@ typedef struct _FJACK {
 	jack_client_t*		client;
 	jack_port_t*		in;
 	jack_port_t*		out;
-	jack_port_t*		fin;
-	jack_port_t*		fout;
 	jack_nframes_t		buffer_size;
 	jack_nframes_t		sample_rate;
 	jack_session_event_t*	session_event;

@@ -252,11 +252,7 @@ fhctrl_handle_sysex_dump ( FHCTRL* fhctrl, SysExDumpV1* sysex ) {
 }
 
 static inline void
-fjack_out_port_handling ( FJACK* j, jack_nframes_t frames ) {
-	void* outbuf = jack_port_get_buffer(j->out, frames);
-	assert (outbuf);
-	jack_midi_clear_buffer(outbuf);
-
+fjack_dispatch_our_out_msg ( FJACK* j, void* outbuf ) {
 	while ( jack_ringbuffer_read_space(j->buffer_midi_out) ) {
 		size_t size;
 		jack_ringbuffer_peek(j->buffer_midi_out, (char*) &size, sizeof size);
@@ -281,43 +277,19 @@ fjack_out_port_handling ( FJACK* j, jack_nframes_t frames ) {
 	}
 }
 
-static inline void
-fjack_forward_port_handling ( FJACK* j, jack_nframes_t frames ) {
-	FHCTRL* fhctrl = (FHCTRL*) j->user;
+int process (jack_nframes_t frames, void* arg) {
+	FJACK* fjack = (FJACK*) arg;
+	FHCTRL* fhctrl = (FHCTRL*) fjack->user;
 
-	void* inbuf = jack_port_get_buffer (j->fin, frames);
+	void* inbuf = jack_port_get_buffer (fjack->in, frames);
 	assert (inbuf);
 
-	void* outbuf = jack_port_get_buffer(j->fout, frames);
+	void* outbuf = jack_port_get_buffer(fjack->out, frames);
 	assert (outbuf);
 	jack_midi_clear_buffer(outbuf);
 
-	jack_nframes_t count = jack_midi_get_event_count (inbuf);
-	jack_nframes_t i;
-	for (i = 0; i < count; ++i) {
-		jack_midi_event_t event;
-		if (jack_midi_event_get (&event, inbuf, i) != 0) break;
-
-		/* Filter out active sensing */
-		if ( event.buffer[0] == 0xFE ) continue;
-
-		/* Process and filter out our messages */
-		if ( ctrl_channel_handling ( fhctrl, event.buffer ) ) continue;
-
-		fhctrl->gui.midi_in = true;
-		if ( jack_midi_event_write(outbuf, event.time, event.buffer, event.size) ) {
-			collect_rt_logs(j, "Forward - Write dropped (buffer size: %d)", jack_midi_max_event_size(outbuf));
-			break;
-		}
-	}
-}
-
-static inline void
-fjack_in_port_handling ( FJACK* j, jack_nframes_t frames ) {
-	FHCTRL* fhctrl = (FHCTRL*) j->user;
-
-	void* inbuf = jack_port_get_buffer (j->in, frames);
-	assert (inbuf);
+	/* Send our queued messages */
+	fjack_dispatch_our_out_msg ( fjack, outbuf );
 
 	jack_nframes_t i, count;
 	count = jack_midi_get_event_count (inbuf);
@@ -327,45 +299,46 @@ fjack_in_port_handling ( FJACK* j, jack_nframes_t frames ) {
 
 //		collect_rt_logs(j, "MIDI: %X", event.buffer[0]);
 
+		/* Filter out active sensing */
+		if ( event.buffer[0] == 0xFE ) continue;
+
 		/* Is this sysex message ? */
-		if ( event.size < 5 || event.buffer[0] != SYSEX_BEGIN ) continue;
-		fhctrl->gui.sysex_midi_in = true;
+		if ( event.size > 4 || event.buffer[0] == SYSEX_BEGIN ) {
+			fhctrl->gui.sysex_midi_in = true;
 
-		switch (event.buffer[1]) {
-		case SYSEX_NON_REALTIME:
-			// event.buffer[2] is target_id - in our case always 7F
-			if ( event.buffer[3] == SYSEX_GENERAL_INFORMATION &&
-			     event.buffer[4] == SYSEX_IDENTITY_REPLY
-			) {
-				SysExIdentReply* r = (SysExIdentReply*) event.buffer;
-				collect_rt_logs(j, "Got SysEx ID Reply ID %X : %X", r->id, r->model[0]);
-				fhctrl_handle_ident_reply ( fhctrl, r );
-			}
-			break;
-		case SYSEX_MYID:
-			if (event.size < sizeof(SysExDumpV1)) continue;
+			switch (event.buffer[1]) {
+			case SYSEX_NON_REALTIME:
+				// event.buffer[2] is target_id - in our case always 7F
+				if ( event.buffer[3] == SYSEX_GENERAL_INFORMATION &&
+				     event.buffer[4] == SYSEX_IDENTITY_REPLY
+				) {
+					SysExIdentReply* r = (SysExIdentReply*) event.buffer;
+					collect_rt_logs(fjack, "Got SysEx ID Reply ID %X : %X", r->id, r->model[0]);
+					fhctrl_handle_ident_reply ( fhctrl, r );
+				}
+				continue;
+			case SYSEX_MYID:
+				if (event.size < sizeof(SysExDumpV1)) continue;
 
-			SysExDumpV1* sysex = (SysExDumpV1*) event.buffer;
-			if ( sysex->type == SYSEX_TYPE_DUMP ) {
-				collect_rt_logs(j, "Got SysEx Dump %X : %s : %s", sysex->uuid, sysex->plugin_name, sysex->program_name);
-				fhctrl_handle_sysex_dump ( fhctrl, sysex );
+				SysExDumpV1* sysex = (SysExDumpV1*) event.buffer;
+				if ( sysex->type == SYSEX_TYPE_DUMP ) {
+					collect_rt_logs(fjack, "Got SysEx Dump %X : %s : %s", sysex->uuid, sysex->plugin_name, sysex->program_name);
+					fhctrl_handle_sysex_dump ( fhctrl, sysex );
+				}
+				continue;
 			}
+		}
+
+		/* Process and filter out our messages */
+		if ( ctrl_channel_handling ( fhctrl, event.buffer ) ) continue;
+
+		/* Forward rest messages */
+		fhctrl->gui.midi_in = true;
+		if ( jack_midi_event_write(outbuf, event.time, event.buffer, event.size) ) {
+			collect_rt_logs(fjack, "Forward - Write dropped (buffer size: %d)", jack_midi_max_event_size(outbuf));
 			break;
 		}
 	}
-}
-
-int process (jack_nframes_t frames, void* arg) {
-	FJACK* fjack = (FJACK*) arg;
-
-	/* Read input */
-	fjack_in_port_handling ( fjack, frames );
-
-	/* Send our queued messages */
-	fjack_out_port_handling ( fjack, frames );
-
-	/* Forward port handling */
-	fjack_forward_port_handling ( fjack, frames );
 
 	return 0;
 }
