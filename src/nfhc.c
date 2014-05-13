@@ -184,21 +184,22 @@ static int edit_selector ( FHCTRL* fhctrl ) {
 	--fs->state;
 	
 	/* Select Channel */
-	for (i=0, count=0; i < 16; i++) snprintf(values[count++], 40, "<C>Channel %d", i);
-	fs->channel = get_value_dialog ("Select channel", "Channel", values, fp->state->channel, count);
+	for (i=0; i < 16; i++) snprintf(values[i], 40, "<C>Channel %d", i);
+	snprintf(values[i++], 40, "<C>No Channel");
+	fs->channel = get_value_dialog ("Select channel", "Channel", values, fp->state->channel, i);
 	if (!fs->channel) return 0;
 	--fs->channel;
 
 	/* Select Preset */
-	for (i=0, count=0; i < 128; i++) snprintf(values[count++], 40, "<C>Preset %d", i);
-	fs->program = get_value_dialog ("Select program", "Preset", values, fp->state->program, count);
+	for (i=0; i < 128; i++) snprintf(values[i], 40, "<C>Preset %d", i);
+	fs->program = get_value_dialog ("Select program", "Preset", values, fp->state->program, i);
 	if (!fs->program) return 0;
 	--fs->program;
 
 	/* Select Volume */
 	if ( fp->type == UNIT_TYPE_PLUGIN ) {
-		for (i=0, count=0; i < MAX_UNITS; i++) snprintf(values[count++], 40, "<C>%d", i);
-		fs->volume = get_value_dialog ("Select volume", "Volume", values, fp->state->volume, count);
+		for (i=0; i < MAX_UNITS; i++) snprintf(values[i], 40, "<C>%d", i);
+		fs->volume = get_value_dialog ("Select volume", "Volume", values, fp->state->volume, i);
 		if (!fs->volume) return 0;
 		--fs->volume;
 	}
