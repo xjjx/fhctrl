@@ -151,8 +151,7 @@ static int get_value_dialog ( char *title, char *label, char **values, int defau
 }
 
 static int edit_selector ( FHCTRL* fhctrl ) {
-	unsigned short i, count, plug;
-	Unit** unit = fhctrl->unit;
+	unsigned short i, plug;
 	Unit* fp;
 	UnitState* fs;
 	char *values[128];
@@ -165,16 +164,16 @@ static int edit_selector ( FHCTRL* fhctrl ) {
 	for (i=0; i < 128; i++) values[i] = alloca( 40 );
 
 	/* Select Plugin */
-	for (i=0, count=0; i < 128; i++) {
-		if (! (fp = unit[i]) ) continue;
-		valunitmap[count] = i;
-		snprintf(values[count], 40, "<C>%s", fp->name);
-		count++;
+	i = 0;
+	FOREACH_UNIT( fp, fhctrl->unit ) {
+		valunitmap[i] = fp->id;
+		snprintf(values[i], 40, "<C>%s", fp->name);
+		i++;
 	}
-	if (count == 0) return 0;
-	plug = get_value_dialog ("Select device", "Device", values, 0, count);
+	if (i == 0) return 0;
+	plug = get_value_dialog ("Select device", "Device", values, 0, i);
 	if (!plug) return 0;
-	fp = unit[ valunitmap[--plug] ];
+	fp = fhctrl->unit[ valunitmap[--plug] ];
 
 	/* Select State */
 	snprintf(values[0], 40, "<C>Bypass");
@@ -198,7 +197,7 @@ static int edit_selector ( FHCTRL* fhctrl ) {
 
 	/* Select Volume */
 	if ( fp->type == UNIT_TYPE_PLUGIN ) {
-		for (i=0; i < MAX_UNITS; i++) snprintf(values[i], 40, "<C>%d", i);
+		for (i=0; i < 128; i++) snprintf(values[i], 40, "<C>%d", i);
 		fs->volume = get_value_dialog ("Select volume", "Volume", values, fp->state->volume, i);
 		if (!fs->volume) return 0;
 		--fs->volume;

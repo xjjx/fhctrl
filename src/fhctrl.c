@@ -102,17 +102,14 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 	LOG ( "SendSong \"%s\"", song->name );
 
 	// Dump states via SysEx - for all FST
-	short i;
-	for (i=0; i < MAX_UNITS; i++) {
-		Unit* fp = fhctrl->unit[i];
-		if ( ! fp ) continue;
-
+	Unit* fp;
+	FOREACH_UNIT( fp, fhctrl->unit ) {
 		/* Save current state */
 		enum State curState = fp->state->state;
 
 		// If unit state in song is NA do not copy plugin state
-		UnitState* songFS = song->unit_state[i];
-		if ( songFS->state == UNIT_NA ) {
+		UnitState* songUS = song->unit_state[fp->id];
+		if ( songUS->state == UNIT_NA ) {
 			switch ( fp->type ) {
 			case UNIT_TYPE_PLUGIN:
 				// For plugin type this mean set it to bypass
@@ -128,7 +125,7 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 			}
 		} else {
 			/* Copy state from song */
-			*fp->state = *songFS;
+			*fp->state = *songUS;
 		}
 
 		// Send state to unit

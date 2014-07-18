@@ -13,11 +13,8 @@ bool dump_state( FHCTRL* fhctrl, const char* config_file ) {
 
 	// Save plugs
 	config_setting_t* group = config_setting_add(cfg.root, "global", CONFIG_TYPE_GROUP);
-	short i;
-	for (i = 0; i < MAX_UNITS; i++) {
-		Unit* fp = fhctrl->unit[i];
-		if ( ! fp ) continue;
-
+	Unit* fp;
+	FOREACH_UNIT( fp, fhctrl->unit ) {
 		snprintf ( name, sizeof name, "plugin%d", fp->id );
 
 		config_setting_t* list = config_setting_add ( group, name, CONFIG_TYPE_LIST );
@@ -35,11 +32,8 @@ bool dump_state( FHCTRL* fhctrl, const char* config_file ) {
 
 		config_setting_t* song_name = config_setting_add(group, "name", CONFIG_TYPE_STRING);
 		config_setting_set_string( song_name, s->name );
-		for (i = 0; i < MAX_UNITS; i++) {
-			Unit* fp = fhctrl->unit[i];
-			if ( ! fp ) continue;
-
-			UnitState* fs = s->unit_state[i];
+		FOREACH_UNIT( fp, fhctrl->unit ) {
+			UnitState* fs = s->unit_state[fp->id];
 
 			/* Do not save states for N/A units */
 			if ( fs->state == UNIT_NA ) continue;

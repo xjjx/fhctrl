@@ -18,6 +18,8 @@
 */
 #define MAX_UNITS 128
 
+#define FOREACH_UNIT(U,UNITS) for(U=unit_next(UNITS,NULL);U;U=unit_next(UNITS,U))
+
 enum State {
 	UNIT_STATE_BYPASS = 0,
 	UNIT_STATE_ACTIVE = 1,
@@ -34,7 +36,7 @@ typedef struct _UnitState {
 
 enum Type { UNIT_TYPE_PLUGIN, UNIT_TYPE_DEVICE };
 typedef struct _Unit {
-	uint8_t id; /* 0 - 127 */
+	uint8_t id; /* 0 - (MAX_UNITS - 1) */
 	char name[24];
 	enum Type type;
 	bool change;
@@ -49,7 +51,7 @@ typedef struct _Song {
 
 /****************** STATE **************************************/
 UnitState* state_new();
-/****************** FST ****************************************/
+/****************** UNIT ***************************************/
 void unit_new ( Unit** unit, Song** songs, uint8_t uuid );
 uint8_t unit_uniqe_id ( Unit** unit, uint8_t start );
 Unit* unit_get ( Unit** unit, Song** songs, uint8_t uuid );
