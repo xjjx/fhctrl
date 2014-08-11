@@ -315,12 +315,17 @@ int process (jack_nframes_t frames, void* arg) {
 				}
 				continue;
 			case SYSEX_MYID:
-				if (event.size < sizeof(SysExDumpV1)) continue;
+				if (event.size < sizeof(SysExDumpV1) && event.size < sizeof(SysExDone)) continue;
 
 				SysExDumpV1* sysex = (SysExDumpV1*) event.buffer;
-				if ( sysex->type == SYSEX_TYPE_DUMP ) {
+				switch ( sysex->type ) {
+				case SYSEX_TYPE_DUMP:
 					collect_rt_logs(fjack, "Got SysEx Dump %X : %s : %s", sysex->uuid, sysex->plugin_name, sysex->program_name);
 					fhctrl_handle_sysex_dump ( fhctrl, sysex );
+					break;
+				case SYSEX_TYPE_DONE:
+					collect_rt_logs(fjack, "Got SysEx Done %X", sysex->uuid);
+					break;
 				}
 				continue;
 			}
