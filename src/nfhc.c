@@ -183,7 +183,8 @@ static int edit_selector ( FHCTRL* fhctrl ) {
 	--fs->state;
 	
 	/* Select Channel */
-	for (i=0; i < 16; i++) snprintf(values[i], 40, "<C>Channel %d", i);
+	snprintf(values[0], 40, "<C>Omni");
+	for (i=1; i < 17; i++) snprintf(values[i], 40, "<C>Channel %d", i);
 	snprintf(values[i++], 40, "<C>No Channel");
 	fs->channel = get_value_dialog ("Select channel", "Channel", values, fp->state->channel, i);
 	if (!fs->channel) return 0;
@@ -213,10 +214,10 @@ static int edit_selector ( FHCTRL* fhctrl ) {
 
 void box_update ( struct box *box, Unit *fp) {
 	char chtxt[3];
-	if ( fp->state->channel == 17 ) {
-		strcpy(chtxt, "--");
-	} else {
-		snprintf(chtxt, sizeof chtxt, "%02d", fp->state->channel);
+	switch ( fp->state->channel ) {
+	case 0:  strcpy(chtxt, "OM"); break;
+	case 17: strcpy(chtxt, "--"); break;
+	default: snprintf(chtxt, sizeof chtxt, "%02d", fp->state->channel);
 	}
 
 	char text[2][BOX_WIDTH + 11];
