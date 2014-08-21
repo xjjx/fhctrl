@@ -40,6 +40,7 @@ typedef struct _Unit {
 	char name[24];
 	enum Type type;
 	bool change;
+	bool wait_done;
 	UnitState* state;
 } Unit;
 

@@ -88,6 +88,7 @@ void fhctrl_unit_send ( FHCTRL* fhctrl, Unit* fp, const char* logFuncName ) {
 		// If unit is NA then keep it state and skip sending
 		SysExDumpV1 sysex = SYSEX_DUMP;
 		unit_set_sysex ( fp, &sysex );
+		fp->wait_done = true;
 		fjack_send ( fjack, &sysex, sizeof sysex, logFuncName, fp->id );
 		break;
 	}
@@ -325,6 +326,8 @@ int process (jack_nframes_t frames, void* arg) {
 					break;
 				case SYSEX_TYPE_DONE:
 					collect_rt_logs(fjack, "Got SysEx Done %X", sysex->uuid);
+					Unit* u = fhctrl->unit[ sysex->uuid ];
+					if ( u ) u->wait_done = false;
 					break;
 				}
 				continue;

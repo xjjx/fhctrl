@@ -36,11 +36,11 @@ CDKSCREEN* cdkscreen;
 
 int get_status_color ( Unit* fp ) {
 	switch ( fp->state->state ) {
-		case UNIT_STATE_BYPASS: return 58;
+		case UNIT_STATE_BYPASS: return ( fp->wait_done ) ? 62 : 58;
 		case UNIT_STATE_ACTIVE:
 			switch ( fp->type ) {
 				case UNIT_TYPE_DEVICE: return 60;
-				case UNIT_TYPE_PLUGIN: return 59;
+				case UNIT_TYPE_PLUGIN: return ( fp->wait_done ) ? 62 : 59;
 			}
 			break;
 		case UNIT_NA: return 0;
