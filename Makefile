@@ -35,8 +35,8 @@ colors: unused/colors.c
 test: unused/test.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack
 
-transport: transport.c
-	$(CC) $(CFLAGS) -o $(APP)_$@ $^ -ljack -lreadline
+transport: tools/transport.c
+	$(CC) $(CFLAGS) -o $(APP)_$@ $^ -ljack -lreadline -lm
 
 inprocess: inprocess.c
 	$(CC) $(CFLAGS) -o $@ $^ -fPIC -shared -ljack
