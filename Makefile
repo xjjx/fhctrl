@@ -14,7 +14,7 @@ BINDIR = usr/bin
 
 .PHONY: all,clean
 
-TARGETS := $(APP) n$(APP) $(APP)_lsp $(APP)_connect
+TARGETS := $(APP) n$(APP)
 all: $(TARGETS)
 
 $(APP): src/config.c src/ftdilcd.c src/basics.c src/fjack.c src/fhctrl.c src/log.c src/lcd.c
@@ -23,9 +23,6 @@ $(APP): src/config.c src/ftdilcd.c src/basics.c src/fjack.c src/fhctrl.c src/log
 n$(APP): src/nfhc.c src/config.c src/ftdilcd.c src/basics.c src/fjack.c src/fhctrl.c src/log.c src/lcd.c
 	$(CC) $(CFLAGS_APP) -DGUI=1 -o $@ $^ $(LIBRARIES) -lcdk -lncurses
 	
-colors: unused/colors.c
-	$(CC) $(CFLAGS) -o $@ $^ -lcdk -lcurses -I/usr/include/cdk
-
 test: unused/test.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack
 
@@ -33,12 +30,8 @@ inprocess: inprocess.c
 	$(CC) $(CFLAGS) -o $@ $^ -fPIC -shared -ljack
 
 clean:
-	rm -f $(TARGETS) $(APP)_transport colors test inprocess 
+	rm -f $(TARGETS) test inprocess 
 
 install: all
 	install -Dm755 $(APP) $(DESTDIR)/$(BINDIR)/$(APP)
 	install -Dm755 n$(APP) $(DESTDIR)/$(BINDIR)/n$(APP)
-	install -Dm755 $(APP)_lsp $(DESTDIR)/$(BINDIR)/$(APP)_lsp
-	install -Dm755 $(APP)_connect $(DESTDIR)/$(BINDIR)/$(APP)_connect
-#	install -Dm755 $(APP)_transport $(DESTDIR)/$(BINDIR)/$(APP)_transport
-
