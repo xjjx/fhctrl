@@ -23,20 +23,11 @@ $(APP): src/config.c src/ftdilcd.c src/basics.c src/fjack.c src/fhctrl.c src/log
 n$(APP): src/nfhc.c src/config.c src/ftdilcd.c src/basics.c src/fjack.c src/fhctrl.c src/log.c src/lcd.c
 	$(CC) $(CFLAGS_APP) -DGUI=1 -o $@ $^ $(LIBRARIES) -lcdk -lncurses
 	
-$(APP)_lsp: tools/lsp.c
-	$(CC) $(CFLAGS) -Wno-deprecated-declarations -o $@ $^ -ljack
-
-$(APP)_connect: tools/connect.c
-	$(CC) $(CFLAGS) -o $@ $^ -ljack
-
 colors: unused/colors.c
 	$(CC) $(CFLAGS) -o $@ $^ -lcdk -lcurses -I/usr/include/cdk
 
 test: unused/test.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljack
-
-transport: tools/transport.c
-	$(CC) $(CFLAGS) -o $(APP)_$@ $^ -ljack -lreadline -lm
 
 inprocess: inprocess.c
 	$(CC) $(CFLAGS) -o $@ $^ -fPIC -shared -ljack
