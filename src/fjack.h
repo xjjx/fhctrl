@@ -42,4 +42,6 @@ void fjack_send_offer ( FJACK* fjack, SysExIdentReply* reply, uint8_t uuid );
 
 void fjack_send_dump_request ( FJACK* fjack , short id );
 
+void fjack_send_reload ( FJACK* fjack, uint8_t uuid );
+
 #endif /* __fjack_h__ */

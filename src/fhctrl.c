@@ -101,6 +101,7 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 	if (!song) return;
 
 	LOG ( "SendSong \"%s\"", song->name );
+	fhctrl->song_current = SongNumber;
 
 	// Dump states via SysEx - for all FST
 	Unit* fp;
@@ -191,6 +192,16 @@ int cpu_load( FHCTRL* fhctrl ) {
 	return (int) jack_cpu_load(fjack->client);
 }
 
+void fhctrl_reload_all ( FHCTRL* fhctrl ) {
+	FJACK* fjack = (FJACK*) fhctrl->user;
+
+	Unit* fp;
+	FOREACH_UNIT( fp, fhctrl->unit ) {
+		if ( fp->type != UNIT_TYPE_PLUGIN ) continue;
+		fjack_send_reload( fjack, fp->id );
+	}
+}
+
 // Midi control channel handling - true if handled
 static inline bool
 ctrl_channel_handling ( FHCTRL* fhctrl, jack_midi_data_t data[] ) {
@@ -200,11 +211,21 @@ ctrl_channel_handling ( FHCTRL* fhctrl, jack_midi_data_t data[] ) {
 	if ( (data[0] & 0x0F) != CTRL_CHANNEL ) return false;
 	// Shine
 	fhctrl->gui.ctrl_midi_in = true;
-	// Change song
-	if ( (data[0] & 0xF0) == 0xC0 ) {
+
+	switch ( data[0] & 0xF0 ) {
+	case 0xC0: // Change song
 		fhctrl->want_song_choke = 10;
 		fhctrl->want_song = data[1];
+		break;
+	case 0xB0: // Control Change
+		switch ( data[1] ) {
+		case 121: // Reset all controler - mean reload all FSTHosts
+			fhctrl_reload_all ( fhctrl );
+			break;
+		}
+		break;
 	}
+	
 	return true;
 }
 
@@ -321,11 +342,12 @@ int process (jack_nframes_t frames, void* arg) {
 				SysExDumpV1* sysex = (SysExDumpV1*) event.buffer;
 				switch ( sysex->type ) {
 				case SYSEX_TYPE_DUMP:
-					collect_rt_logs(fjack, "Got SysEx Dump %X : %s : %s", sysex->uuid, sysex->plugin_name, sysex->program_name);
+					collect_rt_logs(fjack, "Got SysEx %s ID:%X : %s : %s", SysExType2str(sysex->type),
+						sysex->uuid, sysex->plugin_name, sysex->program_name);
 					fhctrl_handle_sysex_dump ( fhctrl, sysex );
 					break;
 				case SYSEX_TYPE_DONE:
-					collect_rt_logs(fjack, "Got SysEx Done %X", sysex->uuid);
+					collect_rt_logs(fjack, "Got SysEx %s ID:%X", SysExType2str(sysex->type), sysex->uuid);
 					Unit* u = fhctrl->unit[ sysex->uuid ];
 					if ( u ) u->wait_done = false;
 					break;

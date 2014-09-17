@@ -59,6 +59,18 @@ void fjack_send_ident_request ( FJACK* fjack ) {
 	);
 }
 
+void fjack_send_reload ( FJACK* fjack, uint8_t uuid ) {
+	LOG("Send reload for %d", uuid);
+	SysExReload sr = SYSEX_RELOAD;
+	sr.uuid = uuid;
+	fjack_send ( fjack,
+		     (jack_midi_data_t*) &sr,
+		     sizeof(SysExReload),
+		     "SendReload",
+		    -1
+	);
+}
+
 void fjack_send_dump_request ( FJACK* fjack , short id ) {
 	SysExDumpRequestV1 sysex_dump_request = SYSEX_DUMP_REQUEST;
 	sysex_dump_request.uuid = id;
