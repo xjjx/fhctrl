@@ -101,7 +101,6 @@ void fhctrl_song_send (FHCTRL* fhctrl, short SongNumber) {
 	if (!song) return;
 
 	LOG ( "SendSong \"%s\"", song->name );
-	fhctrl->song_current = SongNumber;
 
 	// Dump states via SysEx - for all FST
 	Unit* fp;
