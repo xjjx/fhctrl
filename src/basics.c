@@ -104,6 +104,9 @@ void unit_reset_to_na ( Unit** unit ) {
 		// NOTE: non-sysex devices doesn't handle IdentRequest
 		if ( fp->type != UNIT_TYPE_DEVICE )
 			fp->state->state = UNIT_NA;
+
+		// No longer wait
+		fp->wait_done = false;
 	}
 }
 
