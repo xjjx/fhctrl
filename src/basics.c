@@ -106,7 +106,7 @@ void unit_reset_to_na ( Unit** unit ) {
 			fp->state->state = UNIT_NA;
 
 		// No longer wait
-		fp->wait_done = false;
+		fp->wait4done = false;
 	}
 }
 
