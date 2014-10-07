@@ -315,7 +315,7 @@ int process (jack_nframes_t frames, void* arg) {
 		jack_midi_event_t event;
 		if (jack_midi_event_get (&event, inbuf, i) != 0) break;
 
-//		collect_rt_logs(j, "MIDI: %X", event.buffer[0]);
+//		collect_rt_logs(fjack, "MIDI: %X", event.buffer[0]);
 
 		/* Filter out active sensing */
 		if ( event.buffer[0] == 0xFE ) continue;
