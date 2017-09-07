@@ -1,0 +1,7 @@
+sudo: enabled
+dist: trusty
+language: c
+
+before_install:
+  - sudo apt-get -qq update
+  - sudo apt-get install -y libconfig-dev libcdk5-dev libjack-dev
