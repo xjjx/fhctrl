@@ -26,6 +26,7 @@
 #define CTRL_CHANNEL 15
 #define APP_NAME "FHControl"
 
+#ifdef HAVE_FTDI
 /* From lcd.c */
 extern void init_lcd( struct LCDScreen* lcd_screen );
 extern void update_lcd( struct LCDScreen* lcd_screen );
@@ -33,6 +34,7 @@ extern void lcd_set_current_unit ( struct LCDScreen* lcd_screen, Unit* fp );
 
 /* ftdi.h */
 extern void lcd_close();
+#endif
 
 // Config file support
 bool dump_state( FHCTRL* fhctrl, const char* config_file );
@@ -266,7 +268,9 @@ fhctrl_handle_sysex_dump ( FHCTRL* fhctrl, SysExDumpV1* sysex ) {
 	/* FIXME: this use unit_new which can use calloc for new units */
 	Unit* fp = unit_get_from_sysex ( fhctrl->unit, fhctrl->songs, sysex );
 
+#ifdef HAVE_FTDI
 	lcd_set_current_unit ( &fhctrl->lcd_screen, fp );
+#endif
 }
 
 static inline void
@@ -386,7 +390,9 @@ void fhctrl_idle ( FHCTRL* fhctrl ) {
 	/* Update LCD */
 	if (fhctrl->gui.lcd_need_update) {
 		fhctrl->gui.lcd_need_update = false;
+#ifdef HAVE_FTDI
 		update_lcd( &fhctrl->lcd_screen );
+#endif
 	}
 
 	/* If Jack need our answer */
@@ -467,7 +473,9 @@ int main (int argc, char* argv[]) {
 
 	// Init LCD
 	fhctrl.lcd_screen.app_name = APP_NAME;
+#ifdef HAVE_LCD
 	init_lcd( &fhctrl.lcd_screen );
+#endif
 
 	// Try read file
 	if (fhctrl.config_file) load_state( &fhctrl, fhctrl.config_file );
@@ -497,7 +505,9 @@ int main (int argc, char* argv[]) {
 	jack_client_close ( fjack.client );
 
 	// Close LCD
+#ifdef HAVE_FTDI
 	if (fhctrl.lcd_screen.available) lcd_close();
+#endif
 
 	log_close ();
 
