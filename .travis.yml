@@ -1,9 +1,12 @@
-sudo: enabled
+sudo: false
 dist: trusty
 language: c
 
-script: make
+addons:
+   apt:
+     packages:
+     - libconfig-dev
+     - libcdk5-dev
+     - libjack-dev
 
-before_install:
-        - sudo apt-get -qq update
-        - sudo apt-get install -y libconfig-dev libcdk5-dev libjack-dev
+script: make
